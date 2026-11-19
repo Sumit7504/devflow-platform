@@ -1,4 +1,4 @@
-﻿Set-Location "e:\Projects\Devflow Platform\backend"
+Set-Location "e:\Projects\Devflow Platform\backend"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Write-Body($json) {

@@ -4,10 +4,90 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 2 — Authentication & RBAC
+
+### Goal
+Let users register and log in, protect routes with JWTs, and enforce role-based access so that only the right roles can reach certain endpoints. No feature-specific routes yet — just the auth layer every future phase will rely on.
+
+---
+
+### Files Created
+
+#### `backend/models/User.js`
+The Mongoose schema for a user. Stores `name`, `email` (unique, lowercased, trimmed), `password` (hashed, never returned by default via `select: false`), and `role` (candidate / recruiter / admin, defaults to candidate). A `pre("save")` hook runs `bcrypt.hash` automatically whenever the password changes so we never accidentally store plain text. A `matchPassword` instance method handles login comparison cleanly inside the model rather than in controller code.
+
+#### `backend/controllers/authController.js`
+Contains the three handler functions:
+- **register** — checks for duplicate email, creates the user (role limited to candidate/recruiter by the validator), returns a JWT and safe user object.
+- **login** — fetches the user with the password field explicitly re-selected, compares via `matchPassword`, and returns the **same error message** whether the email or password is wrong (prevents user enumeration).
+- **getMe** — returns the already-fetched `req.user` from the auth middleware; no extra DB call needed.
+
+#### `backend/routes/auth.js`
+Wires URLs to middleware chains and controller functions. The order of middleware in each chain matters: validation runs first, then the controller, then role guards on protected routes.
+
+#### `backend/middleware/auth.js`
+Reads the `Authorization: Bearer <token>` header, verifies the JWT with `jsonwebtoken`, fetches the matching user from the DB, and attaches it to `req.user`. If anything fails (missing header, bad token, deleted user) it responds with 401 immediately without calling `next()`.
+
+#### `backend/middleware/authorizeRoles.js`
+A factory function — it takes a list of allowed roles and returns a middleware. By being a factory it stays reusable across any future route: `authorizeRoles("admin", "recruiter")` reads naturally and requires no repeated logic.
+
+#### `backend/middleware/validators.js`
+Centralises all `express-validator` rule arrays and the shared `validate` helper in one file. Keeping rules here (not scattered across route files) makes them easy to find, update, and reuse. The `validate` helper extracts errors and responds with a 422 and a structured array of `{ field, message }` objects so the frontend always gets a consistent error shape.
+
+### Files Modified
+
+#### `backend/.env.example` / `backend/.env`
+Added `JWT_SECRET` (a long random string in production) and `JWT_EXPIRES_IN=7d`.
+
+#### `backend/server.js`
+Mounted the new auth router at `/api/auth`.
+
+---
+
 ## Phase 1 — Backend Skeleton
 
 ### Goal
 Stand up a bare Express server with a MongoDB connection, a health-check route, and proper error handling. No features yet — just a solid foundation every later phase can build on.
+
+---
+
+## Phase 2 — Authentication & RBAC
+
+### Goal
+Let users register and log in, protect routes with JWTs, and enforce role-based access so that only the right roles can reach certain endpoints. No feature-specific routes yet — just the auth layer every future phase will rely on.
+
+---
+
+### Files Created
+
+#### `backend/models/User.js`
+The Mongoose schema for a user. Stores `name`, `email` (unique, lowercased, trimmed), `password` (hashed, never returned by default via `select: false`), and `role` (candidate / recruiter / admin, defaults to candidate). A `pre("save")` hook runs `bcrypt.hash` automatically whenever the password changes so we never accidentally store plain text. A `matchPassword` instance method handles login comparison cleanly inside the model rather than in controller code.
+
+#### `backend/controllers/authController.js`
+Contains the three handler functions:
+- **register** — checks for duplicate email, creates the user (role limited to candidate/recruiter by the validator), returns a JWT and safe user object.
+- **login** — fetches the user with the password field explicitly re-selected, compares via `matchPassword`, and returns the **same error message** whether the email or password is wrong (prevents user enumeration).
+- **getMe** — returns the already-fetched `req.user` from the auth middleware; no extra DB call needed.
+
+#### `backend/routes/auth.js`
+Wires URLs to middleware chains and controller functions. The order of middleware in each chain matters: validation runs first, then the controller, then role guards on protected routes.
+
+#### `backend/middleware/auth.js`
+Reads the `Authorization: Bearer <token>` header, verifies the JWT with `jsonwebtoken`, fetches the matching user from the DB, and attaches it to `req.user`. If anything fails (missing header, bad token, deleted user) it responds with 401 immediately without calling `next()`.
+
+#### `backend/middleware/authorizeRoles.js`
+A factory function — it takes a list of allowed roles and returns a middleware. By being a factory it stays reusable across any future route: `authorizeRoles("admin", "recruiter")` reads naturally and requires no repeated logic.
+
+#### `backend/middleware/validators.js`
+Centralises all `express-validator` rule arrays and the shared `validate` helper in one file. Keeping rules here (not scattered across route files) makes them easy to find, update, and reuse. The `validate` helper extracts errors and responds with a 422 and a structured array of `{ field, message }` objects so the frontend always gets a consistent error shape.
+
+### Files Modified
+
+#### `backend/.env.example` / `backend/.env`
+Added `JWT_SECRET` (a long random string in production) and `JWT_EXPIRES_IN=7d`.
+
+#### `backend/server.js`
+Mounted the new auth router at `/api/auth`.
 
 ---
 
@@ -48,5 +128,45 @@ Registered after all real routes. If a request reaches it, no route matched, so 
 
 #### `backend/models/.gitkeep` / `backend/controllers/.gitkeep`
 Empty placeholder files so Git tracks these otherwise-empty folders. Mongoose models and controller functions will be added in later phases.
+
+---
+
+## Phase 2 — Authentication & RBAC
+
+### Goal
+Let users register and log in, protect routes with JWTs, and enforce role-based access so that only the right roles can reach certain endpoints. No feature-specific routes yet — just the auth layer every future phase will rely on.
+
+---
+
+### Files Created
+
+#### `backend/models/User.js`
+The Mongoose schema for a user. Stores `name`, `email` (unique, lowercased, trimmed), `password` (hashed, never returned by default via `select: false`), and `role` (candidate / recruiter / admin, defaults to candidate). A `pre("save")` hook runs `bcrypt.hash` automatically whenever the password changes so we never accidentally store plain text. A `matchPassword` instance method handles login comparison cleanly inside the model rather than in controller code.
+
+#### `backend/controllers/authController.js`
+Contains the three handler functions:
+- **register** — checks for duplicate email, creates the user (role limited to candidate/recruiter by the validator), returns a JWT and safe user object.
+- **login** — fetches the user with the password field explicitly re-selected, compares via `matchPassword`, and returns the **same error message** whether the email or password is wrong (prevents user enumeration).
+- **getMe** — returns the already-fetched `req.user` from the auth middleware; no extra DB call needed.
+
+#### `backend/routes/auth.js`
+Wires URLs to middleware chains and controller functions. The order of middleware in each chain matters: validation runs first, then the controller, then role guards on protected routes.
+
+#### `backend/middleware/auth.js`
+Reads the `Authorization: Bearer <token>` header, verifies the JWT with `jsonwebtoken`, fetches the matching user from the DB, and attaches it to `req.user`. If anything fails (missing header, bad token, deleted user) it responds with 401 immediately without calling `next()`.
+
+#### `backend/middleware/authorizeRoles.js`
+A factory function — it takes a list of allowed roles and returns a middleware. By being a factory it stays reusable across any future route: `authorizeRoles("admin", "recruiter")` reads naturally and requires no repeated logic.
+
+#### `backend/middleware/validators.js`
+Centralises all `express-validator` rule arrays and the shared `validate` helper in one file. Keeping rules here (not scattered across route files) makes them easy to find, update, and reuse. The `validate` helper extracts errors and responds with a 422 and a structured array of `{ field, message }` objects so the frontend always gets a consistent error shape.
+
+### Files Modified
+
+#### `backend/.env.example` / `backend/.env`
+Added `JWT_SECRET` (a long random string in production) and `JWT_EXPIRES_IN=7d`.
+
+#### `backend/server.js`
+Mounted the new auth router at `/api/auth`.
 
 ---

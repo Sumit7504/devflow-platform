@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const connectDB = require("./config/db");
 const healthRouter = require("./routes/health");
+const authRouter   = require("./routes/auth");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -18,6 +19,7 @@ app.use(express.json()); // Parse incoming JSON request bodies
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/health", healthRouter);
+app.use("/api/auth",   authRouter);
 
 // ── Error Handling (must come last) ───────────────────────────────────────────
 app.use(notFound);       // 404 — no route matched

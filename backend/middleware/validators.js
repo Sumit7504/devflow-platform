@@ -47,4 +47,74 @@ const loginRules = [
     .notEmpty().withMessage("Password is required"),
 ];
 
-module.exports = { validate, registerRules, loginRules };
+// ── Company size options (kept in one place for model + validator to share) ───
+const COMPANY_SIZES = ["", "1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];
+
+// ── Create company rules ──────────────────────────────────────────────────────
+const companyRules = [
+  body("name")
+    .trim()
+    .notEmpty().withMessage("Company name is required"),
+
+  body("description")
+    .optional()
+    .trim(),
+
+  body("website")
+    .optional()
+    .trim()
+    .isURL({ require_protocol: true }).withMessage("Website must be a valid URL (include http/https)"),
+
+  body("location")
+    .optional()
+    .trim(),
+
+  body("industry")
+    .optional()
+    .trim(),
+
+  body("size")
+    .optional()
+    .isIn(COMPANY_SIZES).withMessage(`Size must be one of: ${COMPANY_SIZES.filter(Boolean).join(", ")}`),
+
+  body("logo")
+    .optional()
+    .trim()
+    .isURL({ require_protocol: true }).withMessage("Logo must be a valid URL (include http/https)"),
+];
+
+// ── Update company rules (all fields optional, same constraints) ──────────────
+const updateCompanyRules = [
+  body("name")
+    .optional()
+    .trim()
+    .notEmpty().withMessage("Company name cannot be empty"),
+
+  body("description")
+    .optional()
+    .trim(),
+
+  body("website")
+    .optional()
+    .trim()
+    .isURL({ require_protocol: true }).withMessage("Website must be a valid URL (include http/https)"),
+
+  body("location")
+    .optional()
+    .trim(),
+
+  body("industry")
+    .optional()
+    .trim(),
+
+  body("size")
+    .optional()
+    .isIn(COMPANY_SIZES).withMessage(`Size must be one of: ${COMPANY_SIZES.filter(Boolean).join(", ")}`),
+
+  body("logo")
+    .optional()
+    .trim()
+    .isURL({ require_protocol: true }).withMessage("Logo must be a valid URL (include http/https)"),
+];
+
+module.exports = { validate, registerRules, loginRules, companyRules, updateCompanyRules };

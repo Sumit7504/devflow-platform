@@ -4,10 +4,100 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -33,6 +123,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -43,10 +178,100 @@ Let users register and log in, protect routes with JWTs, and enforce role-based 
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -72,6 +297,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -108,10 +378,100 @@ Mounted the new auth router at `/api/auth`.
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -137,6 +497,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -147,10 +552,100 @@ Stand up a bare Express server with a MongoDB connection, a health-check route, 
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -176,6 +671,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -186,10 +726,100 @@ Let users register and log in, protect routes with JWTs, and enforce role-based 
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -215,6 +845,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -251,10 +926,100 @@ Mounted the new auth router at `/api/auth`.
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -280,6 +1045,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -323,10 +1133,100 @@ Empty placeholder files so Git tracks these otherwise-empty folders. Mongoose mo
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -352,6 +1252,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -362,10 +1307,100 @@ Let users register and log in, protect routes with JWTs, and enforce role-based 
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -391,6 +1426,51 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -427,10 +1507,100 @@ Mounted the new auth router at `/api/auth`.
 
 ---
 
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
+
+---
+
 ## Phase 3a — Company Profile
 
 ### Goal
 Let recruiters create and manage exactly one company profile. Candidates and admins can view companies but cannot create or edit them. Ownership is enforced at the database level (unique index) and at the query level (all writes are scoped to `owner: req.user._id`).
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---
 
@@ -456,5 +1626,50 @@ Added `companyRules` (for POST — `name` required, all others optional) and `up
 
 #### `backend/server.js`
 Mounted the companies router at `/api/companies`.
+
+---
+
+## Phase 3b — Job Postings
+
+### Goal
+Let recruiters post, update, and close jobs against their own company. Any logged-in user can browse open jobs with pagination and filters. Ownership is enforced at the query level so a recruiter can never touch another recruiter's jobs.
+
+---
+
+### Files Created
+
+#### `backend/models/Job.js`
+Mongoose schema for a job posting. References both `Company` and `User` (the poster). `status` defaults to `"open"` and can only be set to `"closed"` through the dedicated close endpoint — the update route strips it from the body. A compound index on `{ status, createdAt }` supports the most common list query (open jobs, newest first) efficiently.
+
+#### `backend/controllers/jobController.js`
+Six handlers:
+
+- **createJob** — looks up the recruiter's company via `Company.findOne({ owner: req.user._id })` and returns `400` if none exists. Strips `company`, `postedBy`, and `status` from the body before creating, so those values always come from server state. Response includes the populated company.
+- **listMyJobs** — queries `{ postedBy: req.user._id }`, sorted newest first.
+- **listJobs** — open jobs only, with pagination (`page`/`limit`, falling back to defaults for bad values, capped at 50), and three optional filters:
+  - `keyword` → case-insensitive regex on `title`
+  - `location` → case-insensitive regex on `location`
+  - `jobType` → exact enum match
+  - Both regex filters escape the input with `escapeRegex()` before building the `RegExp` to prevent regex injection.
+- **getJobById** — validates the ObjectId format (400), returns 404 if missing, otherwise returns the job with populated company.
+- **updateJob** — uses the shared `findOwnJob` helper (400 / 404 / 403), strips `company`, `postedBy`, and `status` from updates, saves with validators.
+- **closeJob** — uses `findOwnJob`, then checks if already closed (400) before setting `status = "closed"`.
+
+**`findOwnJob` helper** — private function used by `updateJob` and `closeJob`. Centralises the ID validation, existence check, and ownership check in one place so neither handler repeats the logic.
+
+**`escapeRegex`** — escapes all regex metacharacters from user-supplied filter strings before they are compiled into a `RegExp`. Prevents a user from injecting a pattern like `.*` to match everything or cause catastrophic backtracking.
+
+#### `backend/routes/jobs.js`
+Route order matters:
+1. `PATCH /:id/close` is declared before `PUT /:id` and `GET /:id` to avoid ambiguity.
+2. `GET /my` is declared **before** `GET /:id` so the literal string `"my"` is never interpreted as an ObjectId parameter.
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `jobRules` (title + description + jobType required; salary, deadline, arrays optional) and `updateJobRules` (all optional). The salary cross-field check (`salaryMax >= salaryMin`) is extracted into a named `salaryMaxCheck` constant and reused by both rule sets to avoid duplication.
+
+#### `backend/server.js`
+Mounted the jobs router at `/api/jobs`.
 
 ---

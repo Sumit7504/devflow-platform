@@ -117,4 +117,103 @@ const updateCompanyRules = [
     .isURL({ require_protocol: true }).withMessage("Logo must be a valid URL (include http/https)"),
 ];
 
-module.exports = { validate, registerRules, loginRules, companyRules, updateCompanyRules };
+// ── Job type options ──────────────────────────────────────────────────────────
+const JOB_TYPES = ["full-time", "part-time", "internship", "contract"];
+
+// ── Shared salary cross-field check ──────────────────────────────────────────
+// Reused by both create and update rules.
+const salaryMaxCheck = body("salaryMax").optional({ nullable: true }).custom((val, { req }) => {
+  const min = req.body.salaryMin;
+  if (val !== undefined && val !== null && min !== undefined && min !== null) {
+    if (Number(val) < Number(min)) {
+      throw new Error("salaryMax must be greater than or equal to salaryMin");
+    }
+  }
+  return true;
+});
+
+// ── Create job rules ──────────────────────────────────────────────────────────
+const jobRules = [
+  body("title")
+    .trim()
+    .notEmpty().withMessage("Job title is required"),
+
+  body("description")
+    .trim()
+    .notEmpty().withMessage("Job description is required"),
+
+  body("jobType")
+    .notEmpty().withMessage("Job type is required")
+    .isIn(JOB_TYPES).withMessage(`jobType must be one of: ${JOB_TYPES.join(", ")}`),
+
+  body("requirements")
+    .optional()
+    .isArray().withMessage("requirements must be an array of strings"),
+
+  body("skills")
+    .optional()
+    .isArray().withMessage("skills must be an array of strings"),
+
+  body("location")
+    .optional()
+    .trim(),
+
+  body("salaryMin")
+    .optional({ nullable: true })
+    .isNumeric().withMessage("salaryMin must be a number"),
+
+  salaryMaxCheck,
+
+  body("deadline")
+    .optional({ nullable: true })
+    .isISO8601().withMessage("deadline must be a valid ISO 8601 date"),
+];
+
+// ── Update job rules (all fields optional, same constraints) ─────────────────
+const updateJobRules = [
+  body("title")
+    .optional()
+    .trim()
+    .notEmpty().withMessage("Job title cannot be empty"),
+
+  body("description")
+    .optional()
+    .trim()
+    .notEmpty().withMessage("Job description cannot be empty"),
+
+  body("jobType")
+    .optional()
+    .isIn(JOB_TYPES).withMessage(`jobType must be one of: ${JOB_TYPES.join(", ")}`),
+
+  body("requirements")
+    .optional()
+    .isArray().withMessage("requirements must be an array of strings"),
+
+  body("skills")
+    .optional()
+    .isArray().withMessage("skills must be an array of strings"),
+
+  body("location")
+    .optional()
+    .trim(),
+
+  body("salaryMin")
+    .optional({ nullable: true })
+    .isNumeric().withMessage("salaryMin must be a number"),
+
+  salaryMaxCheck,
+
+  body("deadline")
+    .optional({ nullable: true })
+    .isISO8601().withMessage("deadline must be a valid ISO 8601 date"),
+];
+
+module.exports = {
+  validate,
+  registerRules,
+  loginRules,
+  companyRules,
+  updateCompanyRules,
+  jobRules,
+  updateJobRules,
+};

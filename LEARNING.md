@@ -4,6 +4,63 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3d-1 — Assessment Creation & Viewing
+
+### Goal
+Enable recruiters to create, view, update, and delete assessments for their jobs, while allowing candidates who hold a non-rejected application for a job to preview the assessment without seeing answers.
+
+---
+
+### Files Created
+
+#### `backend/models/Assessment.js`
+Mongoose schema for job assessments:
+- **`job`**: Reference to `Job` with a unique index ensuring only one assessment can exist per job.
+- **`createdBy`**: Reference to `User` (the recruiter).
+- **`durationMinutes`**: Integer between 1 and 180 minutes.
+- **`questions`**: Array of subdocuments (`questionSchema`, with subdocument `_id: true`), each containing:
+  - `type`: `"mcq"` or `"code"`.
+  - `text`: Prompt/question string.
+  - `points`: Integer points (minimum 1).
+  - `options`: Array of 2 to 6 strings (required for MCQ; undefined for code).
+  - `correctOption`: Index into `options` (required for MCQ; undefined for code).
+
+#### `backend/controllers/assessmentController.js`
+Five controller handlers and two internal helper functions:
+- **`sanitizeForCandidate`**: Strips `correctOption` from MCQ questions, ensures `options` and `correctOption` are absent for code questions, keeps question subdocument `_id`, and returns only `_id`, `title`, `description`, `durationMinutes`, and sanitized `questions`. Excludes recruiter metadata (`postedBy`, `createdBy`, and populated `job`).
+- **`resolveAccess`**: Centralizes access rules for viewing an assessment:
+  - Recruiter: Must own the job (`job.postedBy.equals(req.user._id)`).
+  - Candidate: Must have an existing application for that job that is **not rejected** (`status: { $ne: "rejected" }`).
+  - Others: Returns 403 Forbidden.
+- **`createAssessment`**: Verifies job existence and recruiter ownership (`job.postedBy.equals(req.user._id)`). Prevents duplicates via unique index handling (409 Conflict). Automatically assigns `createdBy` from `req.user._id`.
+- **`getByJobId`**: Fetches assessment by `jobId` parameter. Uses `resolveAccess` and returns the sanitized view for candidates or full view for the owning recruiter.
+- **`getById`**: Fetches assessment by assessment `id`. Same access control and candidate data sanitization.
+- **`updateAssessment`**: Allows only the creating recruiter (`assessment.createdBy.equals(req.user._id)`) to update assessment details. Protects `job`, `jobId`, and `createdBy` from being modified.
+- **`deleteAssessment`**: Allows only the creating recruiter to delete the assessment.
+
+#### `backend/routes/assessments.js`
+Configures route endpoints:
+- `POST /api/assessments` — Recruiter only, with input validation.
+- `GET /api/assessments/job/:jobId` — Declared before `/:id` to prevent route collision. Accessible to the job-owning recruiter and non-rejected candidates.
+- `GET /api/assessments/:id` — Accessible to the job-owning recruiter and non-rejected candidates.
+- `PUT /api/assessments/:id` — Recruiter only, with update validation.
+- `DELETE /api/assessments/:id` — Recruiter only.
+
+---
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `assessmentRules` and `updateAssessmentRules` with a shared `validateQuestions` cross-field validator:
+- Ensures between 1 and 50 questions per assessment.
+- For `mcq`: Enforces `options` is an array of 2 to 6 strings, and `correctOption` is an integer index within `[0, options.length - 1]`.
+- For `code`: Enforces that `options` is not provided (or empty) and `correctOption` is absent.
+
+#### `backend/server.js`
+Mounted `assessmentRouter` at `/api/assessments`.
+
+---
+
 ## Phase 3c — Applications
 
 ### Goal

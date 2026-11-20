@@ -6,8 +6,9 @@ const connectDB = require("./config/db");
 const healthRouter = require("./routes/health");
 const authRouter = require("./routes/auth");
 const companyRouter = require("./routes/companies");
-const jobRouter = require("./routes/jobs");
+const jobRouter         = require("./routes/jobs");
 const applicationRouter = require("./routes/applications");
+const assessmentRouter  = require("./routes/assessments");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -26,6 +27,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/companies", companyRouter);
 app.use("/api/jobs", jobRouter);
 app.use("/api/applications", applicationRouter);
+app.use("/api/assessments",  assessmentRouter);
 
 // ── Error Handling (must come last) ───────────────────────────────────────────
 app.use(notFound);       // 404 — no route matched

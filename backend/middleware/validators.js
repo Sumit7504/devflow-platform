@@ -239,6 +239,93 @@ const statusChangeRules = [
     .withMessage(`status must be one of: ${CHANGEABLE_STATUSES.join(", ")}`),
 ];
 
+// ── Assessment question cross-field validator ─────────────────────────────────
+// Validates each question in the array for type-specific rules.
+// Reused by both create and update rules.
+const validateQuestions = (questions) => {
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q || typeof q !== "object") {
+      throw new Error(`questions[${i}]: must be an object`);
+    }
+    if (!["mcq", "code"].includes(q.type)) {
+      throw new Error(`questions[${i}]: type must be "mcq" or "code"`);
+    }
+    if (!q.text || typeof q.text !== "string" || !q.text.trim()) {
+      throw new Error(`questions[${i}]: text is required`);
+    }
+    if (!Number.isInteger(q.points) || q.points < 1) {
+      throw new Error(`questions[${i}]: points must be an integer >= 1`);
+    }
+
+    if (q.type === "mcq") {
+      if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 6) {
+        throw new Error(`questions[${i}]: mcq question must have 2 to 6 options`);
+      }
+      const maxIdx = q.options.length - 1;
+      if (!Number.isInteger(q.correctOption) || q.correctOption < 0 || q.correctOption > maxIdx) {
+        throw new Error(`questions[${i}]: correctOption must be a valid index (0 to ${maxIdx})`);
+      }
+    }
+
+    if (q.type === "code") {
+      const hasOptions = Array.isArray(q.options) && q.options.length > 0;
+      if (hasOptions) {
+        throw new Error(`questions[${i}]: code question must not have options`);
+      }
+      if (q.correctOption !== undefined && q.correctOption !== null) {
+        throw new Error(`questions[${i}]: code question must not have correctOption`);
+      }
+    }
+  }
+  return true;
+};
+
+// ── Create assessment rules ───────────────────────────────────────────────────
+const assessmentRules = [
+  body("jobId")
+    .notEmpty().withMessage("jobId is required")
+    .custom((val) => mongoose.Types.ObjectId.isValid(val))
+    .withMessage("jobId must be a valid ID"),
+
+  body("title")
+    .trim()
+    .notEmpty().withMessage("Assessment title is required"),
+
+  body("durationMinutes")
+    .notEmpty().withMessage("durationMinutes is required")
+    .isInt({ min: 1, max: 180 })
+    .withMessage("durationMinutes must be an integer between 1 and 180"),
+
+  body("questions")
+    .isArray({ min: 1, max: 50 })
+    .withMessage("questions must be an array of 1 to 50 items")
+    .custom(validateQuestions),
+
+  body("description").optional().trim(),
+];
+
+// ── Update assessment rules (all fields optional, same constraints) ────────────
+const updateAssessmentRules = [
+  body("title")
+    .optional()
+    .trim()
+    .notEmpty().withMessage("Assessment title cannot be empty"),
+
+  body("durationMinutes")
+    .optional()
+    .isInt({ min: 1, max: 180 })
+    .withMessage("durationMinutes must be an integer between 1 and 180"),
+
+  body("questions")
+    .optional()
+    .isArray({ min: 1, max: 50 })
+    .withMessage("questions must be an array of 1 to 50 items")
+    .custom(validateQuestions),
+
+  body("description").optional().trim(),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -249,4 +336,6 @@ module.exports = {
   updateJobRules,
   applyRules,
   statusChangeRules,
+  assessmentRules,
+  updateAssessmentRules,
 };

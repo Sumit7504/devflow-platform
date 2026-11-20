@@ -4,6 +4,50 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3c — Applications
+
+### Goal
+Let candidates apply to open jobs (once per job), and let recruiters manage the applicant pipeline — viewing applicants for their jobs, changing application statuses, and reading individual applications. Ownership is enforced at the query level using `.equals()` for all ObjectId comparisons.
+
+---
+
+### Files Created
+
+#### `backend/models/Application.js`
+Mongoose schema for a job application. Key design choices:
+- **Compound unique index `{ job: 1, candidate: 1 }`** — MongoDB rejects a second application from the same candidate for the same job at the database level. The controller catches error code `11000` and returns a clear `409`.
+- **`statusHistory` array** — every status change (including the initial `"applied"` on creation) is appended as `{ status, changedAt, changedBy }`. This gives a full audit trail without a separate collection.
+- `candidate` and `job` are always set from server state — the body never influences them.
+
+#### `backend/controllers/applicationController.js`
+Five handlers plus two helpers:
+
+- **`parsePagination`** — identical safe pagination logic to `jobController.js` (parse → validate → cap at 50), extracted as a local function to avoid importing across modules.
+- **`resolveApplication`** — shared helper used by `getApplicationById`. Validates ObjectId format (400), fetches the application with full population (job + company + candidate + statusHistory.changedBy), returns `null` and sends the response on failure. All ObjectId comparisons use `.equals()`, never `===`, because Mongoose ObjectIds are objects, not primitives.
+- **`apply`** — guard chain: job exists → job is open → deadline not passed → then `Application.create()`. Seeds `statusHistory` with the initial `"applied"` entry on creation.
+- **`myApplications`** — queries by `candidate: req.user._id`, populates job title and company name via nested populate, sorted newest first.
+- **`jobApplicants`** — validates the jobId, checks the job exists, then uses `.equals(req.user._id)` to confirm recruiter ownership. Returns paginated applicants (same `parsePagination` pattern, capped at 50), optionally filtered by `?status=`. Sorts newest first.
+- **`changeStatus`** — all status-update logic lives in this single function: ObjectId check → find → `.equals()` ownership check → same-value guard (`400`) → push to `statusHistory` → save. Status changes are allowed even on closed jobs (the closure guard only applies when *applying*). `"applied"` cannot be set as a target status — blocked at the validator layer.
+- **`getApplicationById`** — uses `resolveApplication`, then checks `.equals()` for both the candidate owner and the recruiter who posted the job. Either passes; anyone else gets `403`.
+
+#### `backend/routes/applications.js`
+Route declaration order is critical:
+1. `POST /` — candidate apply
+2. `GET /my` — literal, **before** `/:id` so `"my"` is never parsed as an ObjectId
+3. `GET /job/:jobId` — literal prefix, **before** `/:id`
+4. `PATCH /:id/status` — before `GET /:id`
+5. `GET /:id` — catch-all param route, last
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+Added `applyRules` (`jobId` required + valid ObjectId, `resumeUrl` optional URL) and `statusChangeRules` (`status` required, must be `shortlisted | rejected | hired` — `"applied"` deliberately excluded so recruiters cannot revert an application to its initial state). Both follow the same `{ field, message }` error shape as all other rules. Required `mongoose` at the top of this file for the ObjectId validation custom rule.
+
+#### `backend/server.js`
+Mounted the applications router at `/api/applications`.
+
+---
+
 ## Phase 3b — Job Postings
 
 ### Goal

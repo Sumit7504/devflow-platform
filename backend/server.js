@@ -3,10 +3,11 @@ const express = require("express");
 const cors = require("cors");
 
 const connectDB = require("./config/db");
-const healthRouter  = require("./routes/health");
-const authRouter    = require("./routes/auth");
+const healthRouter = require("./routes/health");
+const authRouter = require("./routes/auth");
 const companyRouter = require("./routes/companies");
-const jobRouter     = require("./routes/jobs");
+const jobRouter = require("./routes/jobs");
+const applicationRouter = require("./routes/applications");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -20,10 +21,11 @@ app.use(cors());
 app.use(express.json()); // Parse incoming JSON request bodies
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/api/health",    healthRouter);
-app.use("/api/auth",      authRouter);
+app.use("/api/health", healthRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/companies", companyRouter);
-app.use("/api/jobs",      jobRouter);
+app.use("/api/jobs", jobRouter);
+app.use("/api/applications", applicationRouter);
 
 // ── Error Handling (must come last) ───────────────────────────────────────────
 app.use(notFound);       // 404 — no route matched

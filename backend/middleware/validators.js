@@ -208,6 +208,37 @@ const updateJobRules = [
     .isISO8601().withMessage("deadline must be a valid ISO 8601 date"),
 ];
 
+// ── Application rules ─────────────────────────────────────────────────────────
+const mongoose = require("mongoose");
+
+const applyRules = [
+  body("jobId")
+    .notEmpty().withMessage("jobId is required")
+    .custom((val) => mongoose.Types.ObjectId.isValid(val))
+    .withMessage("jobId must be a valid ID"),
+
+  body("coverLetter")
+    .optional()
+    .trim(),
+
+  body("resumeUrl")
+    .optional()
+    .trim()
+    .isURL({ require_protocol: true })
+    .withMessage("resumeUrl must be a valid URL (include http/https)"),
+];
+
+// ── Status change rules ───────────────────────────────────────────────────────
+// "applied" is excluded — recruiters cannot revert an application to its initial state
+const CHANGEABLE_STATUSES = ["shortlisted", "rejected", "hired"];
+
+const statusChangeRules = [
+  body("status")
+    .notEmpty().withMessage("status is required")
+    .isIn(CHANGEABLE_STATUSES)
+    .withMessage(`status must be one of: ${CHANGEABLE_STATUSES.join(", ")}`),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -216,4 +247,6 @@ module.exports = {
   updateCompanyRules,
   jobRules,
   updateJobRules,
+  applyRules,
+  statusChangeRules,
 };

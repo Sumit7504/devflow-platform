@@ -26,6 +26,10 @@ const userSchema = new mongoose.Schema(
       enum: ["candidate", "recruiter", "admin"],
       default: "candidate",
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );

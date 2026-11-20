@@ -1,4 +1,4 @@
-const { body, validationResult } = require("express-validator");
+const { body, query, validationResult } = require("express-validator");
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 // Call this inside any route handler to short-circuit on validation errors.
@@ -394,6 +394,59 @@ const confirmInterviewRules = [
     .withMessage("slotIndex must be an integer >= 0"),
 ];
 
+// ── Admin Rules ──────────────────────────────────────────────────────────────
+const adminUserListRules = [
+  query("role")
+    .optional()
+    .isIn(["candidate", "recruiter", "admin"])
+    .withMessage("role must be candidate, recruiter, or admin"),
+
+  query("isActive")
+    .optional()
+    .isIn(["true", "false"])
+    .withMessage("isActive must be true or false"),
+
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("page must be an integer >= 1"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("limit must be an integer >= 1"),
+];
+
+const updateUserStatusRules = [
+  body("isActive")
+    .notEmpty().withMessage("isActive is required")
+    .isBoolean().withMessage("isActive must be a boolean"),
+];
+
+const updateUserRoleRules = [
+  body("role")
+    .notEmpty().withMessage("role is required")
+    .isIn(["candidate", "recruiter", "admin"])
+    .withMessage("role must be candidate, recruiter, or admin"),
+];
+
+const adminJobListRules = [
+  query("status")
+    .optional()
+    .isIn(["open", "closed"])
+    .withMessage("status must be open or closed"),
+
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("page must be an integer >= 1"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("limit must be an integer >= 1"),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -411,4 +464,8 @@ module.exports = {
   gradeAttemptRules,
   createInterviewRules,
   confirmInterviewRules,
+  adminUserListRules,
+  updateUserStatusRules,
+  updateUserRoleRules,
+  adminJobListRules,
 };

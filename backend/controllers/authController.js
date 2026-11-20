@@ -49,12 +49,16 @@ const login = async (req, res, next) => {
     const match = await user.matchPassword(password);
     if (!match) return invalid();
 
+    if (user.isActive === false) {
+      return res.status(403).json({ success: false, message: "Account is deactivated" });
+    }
+
     const token = signToken(user._id, user.role);
 
     res.status(200).json({
       success: true,
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive !== false },
     });
   } catch (err) {
     next(err);
@@ -64,10 +68,10 @@ const login = async (req, res, next) => {
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 const getMe = async (req, res) => {
   // req.user is already attached by the auth middleware (no password field)
-  const { _id, name, email, role, createdAt } = req.user;
+  const { _id, name, email, role, isActive, createdAt } = req.user;
   res.status(200).json({
     success: true,
-    user: { id: _id, name, email, role, createdAt },
+    user: { id: _id, name, email, role, isActive: isActive !== false, createdAt },
   });
 };
 

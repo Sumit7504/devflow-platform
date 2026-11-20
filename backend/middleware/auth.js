@@ -20,6 +20,10 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "User no longer exists" });
     }
 
+    if (user.isActive === false) {
+      return res.status(403).json({ success: false, message: "Account is deactivated" });
+    }
+
     req.user = user; // { _id, name, email, role, ... }
     next();
   } catch (err) {

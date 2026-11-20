@@ -4,6 +4,69 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3f — Admin Features
+
+### Goal
+Provide platform administrators with full oversight and administrative controls over users and jobs, plus aggregate platform health metrics. Enforces account deactivation checks across all requests and logins, prevents self-lockout and last-admin demotion, performs safe cascading deletions, and delivers comprehensive real-time analytics.
+
+---
+
+### Files Created
+
+#### `backend/controllers/adminController.js`
+Admin controller handling user management, job lifecycle controls, and platform metrics:
+- **`listUsers`**: Paginated search and filtering of all registered users by role, active status (`isActive`), and name/email search with escaped regex. Passwords are never selected.
+- **`getUserById`**: Retrieves single user details excluding password hash.
+- **`updateUserStatus`**: Toggles `isActive`. Guards against self-deactivation and checks that the last remaining active admin cannot be deactivated.
+- **`updateUserRole`**: Changes user roles between `candidate`, `recruiter`, and `admin`. Guards against changing one's own role and prevents demoting the last remaining active admin.
+- **`listAllJobs`**: Paginated oversight of all jobs regardless of status, populated with company details and optional status/keyword filters.
+- **`closeJobAdmin`**: Closes any open job immediately with a 400 check if already closed.
+- **`deleteJobAdmin`**: Deletes a job only if no applications exist for it (409) and no attempts exist for its linked assessment (409). Safely deletes the linked assessment before deleting the job.
+- **`getAdminStats`**: Aggregates comprehensive counts for users (by role and active status), jobs (by status), applications (by status: `applied`, `shortlisted`, `rejected`, `hired`), interviews (by status), attempts (by status), and total companies. Pre-populates all enum keys with zero counts so empty statuses are always displayed.
+
+#### `backend/routes/admin.js`
+Declares admin endpoints mounted under `/api/admin`. Protected globally with `auth` and `authorizeRoles("admin")`:
+- `GET /api/admin/stats`
+- `GET /api/admin/users`
+- `GET /api/admin/users/:id`
+- `PATCH /api/admin/users/:id/status`
+- `PATCH /api/admin/users/:id/role`
+- `GET /api/admin/jobs`
+- `PATCH /api/admin/jobs/:id/close`
+- `DELETE /api/admin/jobs/:id`
+
+#### `backend/scripts/migrateUsersIsActive.js`
+A one-time idempotent migration script that connects to MongoDB and initializes `isActive: true` on any existing user documents that lack the field.
+
+---
+
+### Files Modified
+
+#### `backend/models/User.js`
+Added `isActive: { type: Boolean, default: true }` to the user schema.
+
+#### `backend/middleware/auth.js`
+Added an active status check (`user.isActive === false`) rejecting deactivated users with HTTP 403 `"Account is deactivated"` on every authenticated request.
+
+#### `backend/controllers/authController.js`
+- In `login`: Rejects deactivated accounts (`user.isActive === false`) with HTTP 403 `"Account is deactivated"` immediately after credential verification.
+- In `getMe`: Surfaces `isActive` in the authenticated user profile response.
+
+#### `backend/middleware/validators.js`
+Added express-validator rule sets for admin query and mutation operations:
+- `adminUserListRules`: Validates pagination parameters and ensures `role` and `isActive` query values match allowed enums.
+- `updateUserStatusRules`: Enforces that `isActive` is a required boolean.
+- `updateUserRoleRules`: Enforces that `role` is one of `candidate`, `recruiter`, or `admin`.
+- `adminJobListRules`: Validates pagination parameters and restricts `status` query values to `open` or `closed`.
+
+#### `backend/server.js`
+Mounted the admin router at `/api/admin`.
+
+#### `backend/package.json`
+Added `"migrate:users": "node scripts/migrateUsersIsActive.js"` to run the migration script via npm.
+
+---
+
 ## Phase 3e — Interview Scheduling
 
 ### Goal

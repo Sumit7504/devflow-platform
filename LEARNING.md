@@ -4,6 +4,93 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 4 — Real-Time Notifications with Socket.IO
+
+### Goal
+Provide real-time notification delivery to users across the platform without requiring polling. Automatically alerts recruiters and candidates when applications are submitted or updated, assessments are taken or graded, and interviews are proposed, confirmed, declined, or cancelled. Enforces strict connection-level JWT authentication and isolation into dedicated private rooms.
+
+---
+
+### Concept & Architecture
+
+#### 1. What are WebSockets and Socket.IO?
+Traditional HTTP is a request-response protocol: the client asks, the server replies, and the connection closes. When an event happens on the server (e.g. a candidate applies for a job), the recruiter's browser wouldn't know unless it repeatedly polls the server every few seconds.
+WebSockets establish a persistent, bidirectional, full-duplex TCP connection between the browser and server. Socket.IO builds on top of WebSockets, providing automatic reconnection, connection fallback, and room abstractions.
+
+#### 2. Authentication & Private Rooms (`user:<userId>`)
+- **Handshake Authentication**: When a client connects, it provides its JWT token in `socket.handshake.auth.token`. Socket.IO's connection middleware (`io.use`) decodes the token, verifies the user in MongoDB, and checks `user.isActive !== false`. Invalid tokens or deactivated accounts are rejected before any connection is established.
+- **Private Rooms**: Upon connecting, the server forces the socket to join a dedicated room named `user:<userId>`. Clients cannot choose which room to join or emit arbitrary notification creation events.
+- **Broadcasting Targeted Events**: To notify a specific user, the server simply targets their room: `io.to("user:<recipientId>").emit("notification:new", notification)`. Any active browser tab or mobile device connected for that user immediately receives the event.
+
+#### 3. Non-Blocking Notification Flow
+A core principle of real-time eventing is that secondary delivery must never break primary business logic. If a database glitch or a disconnected socket occurs during notification dispatch, the candidate's application or assessment submission must still succeed.
+The `notify()` service wraps both persistence and socket emission in a `try/catch` block. Controllers trigger `notify()` asynchronously *after* their main database operations have succeeded.
+
+---
+
+### Files Created
+
+#### `backend/models/Notification.js`
+Mongoose schema modeling notifications:
+- **`recipient`**: Reference to the target `User`.
+- **`type`**: Enum restricting allowed event types (`application_received`, `application_status`, `assessment_submitted`, `assessment_graded`, `interview_proposed`, `interview_confirmed`, `interview_declined`, `interview_cancelled`).
+- **`title` & `message`**: User-facing notification subject and content.
+- **`data`**: Optional ObjectId links to related entities (`application`, `job`, `interview`, `attempt`).
+- **`isRead` & `readAt`**: Track read status and timestamps.
+- **TTL Index**: Configured with `{ expireAfterSeconds: 7776000 }` (90 days) on `createdAt` so old notifications are pruned automatically by MongoDB without manual cleanup scripts.
+- **Compound Indexes**: Indexed on `{ recipient: 1, createdAt: -1 }` and `{ recipient: 1, isRead: 1 }` for high-throughput inbox querying.
+
+#### `backend/socket.js`
+Centralized Socket.IO lifecycle manager:
+- Attaches to the Express HTTP server with CORS configured from `CLIENT_URL`.
+- Intercepts connection attempts via `io.use()` to validate JWTs in `socket.handshake.auth.token`.
+- Automatically places authenticated sockets into `user:<userId>`.
+- Exports `init(httpServer)` and `getIO()`.
+
+#### `backend/services/notificationService.js`
+Reusable notification dispatch function `notify(recipientId, { type, title, message, data })`:
+- Persists the notification record to MongoDB.
+- Emits `"notification:new"` to the recipient's private room `user:<recipientId>`.
+- Catches and logs any persistence or emission errors safely to prevent interrupting controller execution.
+
+#### `backend/controllers/notificationController.js`
+REST controller for inbox management:
+- **`listMyNotifications`**: Returns paginated notifications belonging to the logged-in user, sorted newest first, with optional `?unread=true` filtering.
+- **`getUnreadCount`**: Lightweight count of unread notifications for navbar badges.
+- **`markAllAsRead`**: Batch updates all unread notifications for the caller to `isRead: true`.
+- **`markAsRead`**: Marks an individual notification as read. Returns 404 if the notification does not exist or belongs to another user (preventing ID enumeration).
+- **`deleteNotification`**: Deletes a single notification belonging to the caller.
+
+#### `backend/routes/notifications.js`
+Declares notification routes protected with `auth`. Declares `/unread-count` and `/read-all` before `/:id` to avoid route parameter collision.
+
+---
+
+### Files Modified
+
+#### `backend/package.json`
+Added `socket.io` to dependencies and `socket.io-client` to devDependencies.
+
+#### `backend/.env.example` & `backend/.env`
+Added `CLIENT_URL=http://localhost:5173` for Socket.IO CORS configuration.
+
+#### `backend/server.js`
+Switched from `app.listen()` to Node's `http.createServer(app)` to bind both Express and Socket.IO to the same TCP port. Mounted `/api/notifications`.
+
+#### `backend/middleware/validators.js`
+Added `notificationListRules` validating pagination and `?unread` query parameters.
+
+#### `backend/controllers/applicationController.js`
+Added `notify` hooks on job application submission (`application_received`) and status updates (`application_status`).
+
+#### `backend/controllers/attemptController.js`
+Added `notify` hooks on assessment submission (`assessment_submitted`), auto-grading on submit (`assessment_graded`), and manual recruiter grading (`assessment_graded`).
+
+#### `backend/controllers/interviewController.js`
+Added `notify` hooks on interview proposal (`interview_proposed`), candidate confirmation (`interview_confirmed`), candidate decline (`interview_declined`), and recruiter cancellation (`interview_cancelled`).
+
+---
+
 ## Phase 3f — Admin Features
 
 ### Goal

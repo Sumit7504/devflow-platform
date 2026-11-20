@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Application = require("../models/Application");
 const Job         = require("../models/Job");
+const { notify }  = require("../services/notificationService");
 
 // ── Population specs ──────────────────────────────────────────────────────────
 // For candidate's /my list: job title + company name
@@ -86,6 +87,14 @@ const apply = async (req, res, next) => {
     });
 
     res.status(201).json({ success: true, application });
+
+    // Real-time notification: notify recruiter of new application
+    notify(job.postedBy, {
+      type: "application_received",
+      title: "New Application Received",
+      message: `${req.user.name} applied for ${job.title}`,
+      data: { application: application._id, job: job._id },
+    });
   } catch (err) {
     // Duplicate compound index → candidate already applied to this job
     if (err.code === 11000) {
@@ -203,6 +212,14 @@ const changeStatus = async (req, res, next) => {
       changedBy: req.user._id,
     });
     await application.save();
+
+    // Real-time notification: notify candidate of status change
+    notify(application.candidate._id || application.candidate, {
+      type: "application_status",
+      title: "Application Status Updated",
+      message: `Your application for ${application.job.title} is now ${newStatus}`,
+      data: { application: application._id, job: application.job._id || application.job },
+    });
 
     res.status(200).json({ success: true, application });
   } catch (err) {

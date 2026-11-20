@@ -1,6 +1,7 @@
 const mongoose    = require("mongoose");
 const Interview   = require("../models/Interview");
 const Application = require("../models/Application");
+const { notify }  = require("../services/notificationService");
 
 // ── Note on Concurrency & Race Windows ───────────────────────────────────────
 // In interview scheduling, overlapping checks query existing confirmed selectedSlots.
@@ -196,6 +197,14 @@ const createInterview = async (req, res, next) => {
       .populate("job", "title");
 
     res.status(201).json({ success: true, interview: populated });
+
+    // Real-time notification: notify candidate of proposed interview
+    notify(populated.candidate._id || populated.candidate, {
+      type: "interview_proposed",
+      title: "Interview Proposed",
+      message: `An interview has been proposed for ${populated.job.title}`,
+      data: { interview: populated._id, job: populated.job._id, application: populated.application },
+    });
   } catch (err) {
     if (err.code === 11000) {
       return res.status(409).json({
@@ -413,6 +422,14 @@ const confirmInterview = async (req, res, next) => {
     }
 
     res.status(200).json({ success: true, interview: confirmed });
+
+    // Real-time notification: notify recruiter of confirmed interview
+    notify(confirmed.recruiter._id || confirmed.recruiter, {
+      type: "interview_confirmed",
+      title: "Interview Confirmed",
+      message: `${req.user.name} confirmed the interview for ${confirmed.job.title}`,
+      data: { interview: confirmed._id, job: confirmed.job._id, application: confirmed.application },
+    });
   } catch (err) {
     next(err);
   }
@@ -478,6 +495,14 @@ const declineInterview = async (req, res, next) => {
     }
 
     res.status(200).json({ success: true, interview: declined });
+
+    // Real-time notification: notify recruiter of declined interview
+    notify(declined.recruiter._id || declined.recruiter, {
+      type: "interview_declined",
+      title: "Interview Declined",
+      message: `${req.user.name} declined the interview for ${declined.job.title}`,
+      data: { interview: declined._id, job: declined.job._id, application: declined.application },
+    });
   } catch (err) {
     next(err);
   }
@@ -543,6 +568,14 @@ const cancelInterview = async (req, res, next) => {
     }
 
     res.status(200).json({ success: true, interview: cancelled });
+
+    // Real-time notification: notify candidate of cancelled interview
+    notify(cancelled.candidate._id || cancelled.candidate, {
+      type: "interview_cancelled",
+      title: "Interview Cancelled",
+      message: `The interview for ${cancelled.job.title} has been cancelled`,
+      data: { interview: cancelled._id, job: cancelled.job._id, application: cancelled.application },
+    });
   } catch (err) {
     next(err);
   }

@@ -447,6 +447,24 @@ const adminJobListRules = [
     .withMessage("limit must be an integer >= 1"),
 ];
 
+// ── Notification Rules ───────────────────────────────────────────────────────
+const notificationListRules = [
+  query("unread")
+    .optional()
+    .isIn(["true", "false"])
+    .withMessage("unread must be true or false"),
+
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("page must be an integer >= 1"),
+
+  query("limit")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("limit must be an integer >= 1"),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -468,4 +486,5 @@ module.exports = {
   updateUserStatusRules,
   updateUserRoleRules,
   adminJobListRules,
+  notificationListRules,
 };

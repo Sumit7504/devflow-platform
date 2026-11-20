@@ -123,6 +123,17 @@ const updateUserStatus = async (req, res, next) => {
     targetUser.isActive = isActive;
     await targetUser.save();
 
+    // Disconnect active socket connections if the account is being deactivated
+    if (isActive === false) {
+      try {
+        const { getIO } = require("../socket");
+        const io = getIO();
+        io.in(`user:${targetUser._id}`).disconnectSockets(true);
+      } catch (err) {
+        console.error("Error disconnecting sockets on user deactivation:", err.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: `User account ${isActive ? "activated" : "deactivated"} successfully`,

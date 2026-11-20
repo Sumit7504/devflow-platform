@@ -2,6 +2,7 @@ const mongoose   = require("mongoose");
 const Attempt    = require("../models/Attempt");
 const Assessment = require("../models/Assessment");
 const Application = require("../models/Application");
+const { notify } = require("../services/notificationService");
 
 // ── Comment on Abandoned Attempts ────────────────────────────────────────────
 // In an online assessment platform, candidates may start an attempt but fail to
@@ -323,6 +324,29 @@ const submitAttempt = async (req, res, next) => {
       success: true,
       attempt: sanitizeAttemptForCandidate(updatedAttempt, assessment),
     });
+
+    // Real-time notifications: candidate graded & recruiter submitted
+    if (finalStatus === "graded") {
+      notify(req.user._id, {
+        type: "assessment_graded",
+        title: "Assessment Graded",
+        message: `Your assessment for ${assessment.title} has been graded: ${updatedAttempt.totalScore}/${updatedAttempt.maxScore} points`,
+        data: { attempt: updatedAttempt._id, job: assessment.job },
+      });
+      notify(assessment.createdBy, {
+        type: "assessment_submitted",
+        title: "Assessment Submitted",
+        message: `${req.user.name} submitted an assessment for ${assessment.title} (Score: ${updatedAttempt.totalScore}/${updatedAttempt.maxScore})`,
+        data: { attempt: updatedAttempt._id, job: assessment.job },
+      });
+    } else {
+      notify(assessment.createdBy, {
+        type: "assessment_submitted",
+        title: "Assessment Submitted",
+        message: `${req.user.name} submitted an assessment for ${assessment.title}`,
+        data: { attempt: updatedAttempt._id, job: assessment.job },
+      });
+    }
   } catch (err) {
     next(err);
   }
@@ -633,6 +657,14 @@ const gradeAttempt = async (req, res, next) => {
     attempt.gradedAt = new Date();
 
     await attempt.save();
+
+    // Real-time notification: notify candidate of graded attempt
+    notify(attempt.candidate, {
+      type: "assessment_graded",
+      title: "Assessment Graded",
+      message: `Your assessment for ${attempt.assessment.title} has been graded: ${attempt.totalScore}/${attempt.maxScore} points`,
+      data: { attempt: attempt._id, job: attempt.assessment.job._id || attempt.assessment.job },
+    });
 
     res.status(200).json({
       success: true,

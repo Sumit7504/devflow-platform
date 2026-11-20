@@ -4,6 +4,116 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 5a — Frontend Setup, Routing & Authentication
+
+### Goal
+Establish the frontend foundation using React + Vite, implement client-side routing with `react-router-dom`, manage global authentication state via React Context, enforce role-based access control with `ProtectedRoute`, and configure Axios with request/response interceptors for Bearer token injection and seamless session management.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Client-Side Routing with React Router
+In traditional multi-page web applications, every link click fetches an entirely new HTML document from the server. React Router enables Single Page Application (SPA) routing:
+- `BrowserRouter` listens to browser URL changes via HTML5 History API (`pushState`, `replaceState`).
+- `Routes` and `Route` map URL paths (e.g. `/`, `/login`, `/candidate`) directly to React components without triggering full browser page reloads.
+- `useNavigate` and `<Navigate />` trigger imperative and declarative client-side transitions.
+
+#### 2. Global State with React Context (`AuthContext`)
+Components throughout the app (Navbar, Login, Register, Protected Routes, Dashboards) need to know who the logged-in user is, what role they have, and how to log in or log out.
+- Passing `user` through props down multiple component levels ("prop drilling") is fragile and unmaintainable.
+- `AuthContext` provides a global broadcast mechanism. Wrapping `<App />` inside `<AuthProvider>` allows any nested component to call `useAuth()` to access `{ user, token, isAuthenticated, login, register, logout, loading, serverError }`.
+- On startup, `AuthContext` attempts to restore the session by reading the stored JWT and calling `GET /api/auth/me`. If the server is temporarily unreachable, the token is preserved and a non-destructive warning banner is shown; the token is cleared only if `/auth/me` returns `401 Unauthorized` or `403 Forbidden`.
+
+#### 3. Protected Routes & Role-Based Access Control (`ProtectedRoute`)
+- Unauthenticated users attempting to visit dashboard pages are intercepted and redirected to `/login`, preserving their intended destination in `location.state.from`.
+- Authenticated users whose role does not match `allowedRoles` (for instance, a candidate attempting to access `/admin` or `/recruiter`) are redirected to `/unauthorized`.
+- Authenticated users attempting to visit `/login` or `/register` are redirected away to their role dashboard (`/candidate`, `/recruiter`, or `/admin`).
+- After a successful login, users are navigated to their intended page only if their role permits it; otherwise, they are safely routed to their role dashboard.
+
+#### 4. Axios Request and Response Interceptors
+- **Request Interceptor**: Centralizes Bearer token injection. Before any outgoing HTTP request leaves the browser, the interceptor reads the token from `localStorage` (safely inside `try/catch`) and attaches `Authorization: Bearer <token>`.
+- **Response Interceptor**: Intercepts API responses before they reach the component `then`/`catch` handlers.
+  - Skips `/auth/login` and `/auth/register` so wrong-password (401) and registration validation errors are returned directly to the form.
+  - For all other endpoints, if a `401` or a `403 Account is deactivated` response occurs, it automatically purges the stored token and routes the user to `/login`.
+
+#### 5. Security & Production CORS Note
+- In local development, `app.use(cors())` permits all origins to simplify parallel tooling.
+- **Production Note**: In production environments, CORS must be strictly restricted to the frontend origin:
+  `app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));`
+- Authentication tokens are never printed to browser console logs and the storage key is consolidated into a single constant `TOKEN_STORAGE_KEY`.
+
+---
+
+### Files Created
+
+#### `frontend/src/api/client.js`
+Axios instance configured with `baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api"`. Integrates:
+- `TOKEN_STORAGE_KEY` constant and safe storage accessors (`getStoredToken`, `setStoredToken`, `clearStoredToken`).
+- Request interceptor attaching `Authorization: Bearer <token>`.
+- Response interceptor catching 401 and deactivated 403 errors (excluding auth endpoints) to auto-clear credentials and redirect to `/login`.
+
+#### `frontend/src/context/AuthContext.jsx`
+React context providing authentication state and operations:
+- `user`, `token`, `loading`, `serverError`, `isAuthenticated`.
+- `login(email, password)` and `register(name, email, password, role)` matching exact backend API responses.
+- `logout()`: clears storage and state.
+- Startup session restoration calling `GET /api/auth/me`.
+
+#### `frontend/src/components/ProtectedRoute.jsx`
+Route wrapper enforcing authentication and `allowedRoles` checks. Displays a session restoration spinner while loading.
+
+#### `frontend/src/components/Navbar.jsx`
+Dynamic, role-aware top navigation bar displaying links to existing pages, user name, role badge, and logout.
+
+#### `frontend/src/pages/Home.jsx`
+Landing page introducing DevFlow with role-specific calls to action.
+
+#### `frontend/src/pages/Login.jsx`
+Authentication form featuring input error mapping (422), general error alerts, submit button disabling while in flight, and role-based post-login redirection.
+
+#### `frontend/src/pages/Register.jsx`
+Registration form with role radio buttons limited strictly to `candidate` and `recruiter` (admin excluded). Formats and displays backend 422 validation errors.
+
+#### `frontend/src/pages/CandidateDashboard.jsx`
+Placeholder workspace for candidates at `/candidate`.
+
+#### `frontend/src/pages/RecruiterDashboard.jsx`
+Placeholder workspace for recruiters at `/recruiter`.
+
+#### `frontend/src/pages/AdminDashboard.jsx`
+Placeholder console for administrators at `/admin`.
+
+#### `frontend/src/pages/Unauthorized.jsx`
+403 access-denied page informing users their current role lacks permissions, with return links.
+
+#### `frontend/src/pages/NotFound.jsx`
+404 catch-all view for unmatched routes with a link to return Home.
+
+#### `frontend/src/routes/AppRoutes.jsx`
+Central route configuration declaring public routes, protected role dashboards, and the 404 fallback.
+
+#### `frontend/src/App.jsx` & `frontend/src/main.jsx`
+Application root wrapped in `BrowserRouter` and `AuthProvider`.
+
+#### `frontend/src/index.css`
+Lightweight modern styles for forms, validation states, alerts, navigation, and badges.
+
+#### `frontend/package.json` & `frontend/vite.config.js`
+Configuration for Vite + React with `react-router-dom` and `axios`.
+
+#### `frontend/.gitignore` & `frontend/.env.example`
+Ignores build outputs and dependencies, providing `VITE_API_URL=http://localhost:5000/api`.
+
+---
+
+### Files Modified
+
+#### `backend/server.js`
+Added production security notice specifying that CORS must be restricted to `CLIENT_URL` in production.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

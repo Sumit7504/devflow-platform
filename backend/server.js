@@ -28,6 +28,10 @@ initSocket(server);
 connectDB();
 
 // ── Global Middleware ─────────────────────────────────────────────────────────
+// Note on CORS in production:
+// In local development, app.use(cors()) allows all origins for ease of testing.
+// In production, CORS must be strictly restricted to process.env.CLIENT_URL:
+// app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(cors());
 app.use(express.json()); // Parse incoming JSON request bodies
 

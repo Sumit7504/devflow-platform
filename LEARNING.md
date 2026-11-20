@@ -4,6 +4,64 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3d-2 — Attempts, Submission & Grading
+
+### Goal
+Enable candidates to start, complete, and submit assessment attempts with strict timing and validation rules, auto-score multiple-choice questions on the server, allow recruiters to review and grade code questions, and preserve evaluation integrity by locking assessment questions and duration once attempts exist.
+
+---
+
+### Files Created
+
+#### `backend/models/Attempt.js`
+Mongoose schema tracking candidate assessment attempts:
+- **`assessment` & `candidate`**: References to `Assessment` and `User`. Unique compound index `{ assessment: 1, candidate: 1 }` prevents multiple attempts for the same assessment.
+- **`status`**: State machine (`"in_progress"` → `"submitted"` → `"graded"`).
+- **`startedAt` & `submittedAt`**: Precise timestamps recorded by the server.
+- **`answers`**: Array of answer subdocuments (`_id: true`) containing `question` reference, `selectedOption` (for MCQ), `codeAnswer` (up to 10,000 characters), `pointsAwarded`, and optional recruiter `feedback`.
+- **`mcqScore`, `codeScore`, `totalScore`, `maxScore`**: Server-calculated scores ensuring client inputs can never manipulate scoring.
+- **`gradedBy` & `gradedAt`**: Audit metadata identifying the recruiter who graded manual code submissions.
+- **Abandoned Attempts**: Documented design for attempts started but never submitted before the deadline passes; they remain in `"in_progress"`, cannot be submitted once expired, and can be swept by maintenance jobs.
+
+#### `backend/controllers/attemptController.js`
+Complete attempt lifecycle management with dedicated atomic operations and security guards:
+- **`startAttempt`**: Confirms candidate holds an active, non-rejected application for the assessment's job, creates the attempt, and calculates the exact `deadline` (`startedAt + durationMinutes`). Returns 409 if an attempt already exists.
+- **`submitAttempt`**:
+  - Enforces atomic state transitions using `findOneAndUpdate({ _id, candidate, status: "in_progress" })`, guaranteeing that concurrent or double submits fail with 400.
+  - Enforces timing: rejects submissions after `startedAt + durationMinutes + 60s grace period`.
+  - Strictly validates answers: checks that question IDs belong to the assessment with no string-level duplicates, restricts `selectedOption` to MCQ questions within valid bounds, and restricts `codeAnswer` to code questions.
+  - Automatically evaluates MCQ answers against `correctOption`.
+  - Automatically marks pure MCQ assessments as `"graded"`; marks assessments containing code questions as `"submitted"`.
+  - Returns candidate-sanitized output without `correctOption`.
+- **`myAttempts`**: Returns candidate's attempt history with assessment and job titles, sorted newest first.
+- **`getAttemptById`**: Dual-role authorization. Candidates see their submitted answers, scores, feedback, and deadline, but **never** `correctOption`. Recruiters see all details, candidate contact information, and assessment question solutions.
+- **`assessmentAttempts`**: Recruiter-only paginated listing of all candidate attempts for a given assessment with optional status filtering.
+- **`gradeAttempt`**: Allows recruiters to grade code questions only. Strictly checks that question IDs are unique code questions and `0 <= pointsAwarded <= question.points`. Recomputes `codeScore` and `totalScore`, sets status to `"graded"`, and logs recruiter ID and timestamp.
+
+#### `backend/routes/attempts.js`
+Mounted under `/api/attempts`:
+- `POST /start` (Candidate only)
+- `GET /my` (Candidate only; declared before `/:id`)
+- `GET /assessment/:assessmentId` (Recruiter only; declared before `/:id`)
+- `POST /:id/submit` (Candidate only)
+- `PATCH /:id/grade` (Recruiter only)
+- `GET /:id` (Candidate owner or job-owning recruiter)
+
+---
+
+### Files Modified
+
+#### `backend/controllers/assessmentController.js`
+- Added data protection: If any `Attempt` exists for an assessment (`Attempt.exists({ assessment: id })`), deleting the assessment or modifying its `questions` or `durationMinutes` is blocked with `409 Conflict`, ensuring existing grades and timelines remain accurate.
+
+#### `backend/middleware/validators.js`
+- Added `startAttemptRules`, `submitAttemptRules`, and `gradeAttemptRules` with structured `422` validation handling.
+
+#### `backend/server.js`
+- Mounted `attemptRouter` at `/api/attempts`.
+
+---
+
 ## Phase 3d-1 — Assessment Creation & Viewing
 
 ### Goal

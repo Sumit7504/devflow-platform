@@ -2,6 +2,7 @@ const mongoose   = require("mongoose");
 const Assessment = require("../models/Assessment");
 const Job        = require("../models/Job");
 const Application = require("../models/Application");
+const Attempt    = require("../models/Attempt");
 
 // ── Candidate-safe response builder ──────────────────────────────────────────
 // Returns only the fields a candidate is allowed to see:
@@ -177,6 +178,23 @@ const updateAssessment = async (req, res, next) => {
     // Strip protected fields — job, jobId and createdBy must never change
     const { job: _j, jobId: _jid, createdBy: _c, ...updates } = req.body;
 
+    // If candidate attempts exist, block changing questions and durationMinutes (keep scores meaningful)
+    const hasAttempts = await Attempt.exists({ assessment: id });
+    if (hasAttempts) {
+      if (req.body.questions !== undefined) {
+        return res.status(409).json({
+          success: false,
+          message: "Cannot modify questions because candidate attempts exist for this assessment",
+        });
+      }
+      if (req.body.durationMinutes !== undefined) {
+        return res.status(409).json({
+          success: false,
+          message: "Cannot modify durationMinutes because candidate attempts exist for this assessment",
+        });
+      }
+    }
+
     Object.assign(assessment, updates);
     await assessment.save();
 
@@ -201,6 +219,15 @@ const deleteAssessment = async (req, res, next) => {
 
     if (!assessment.createdBy.equals(req.user._id)) {
       return res.status(403).json({ success: false, message: "You are not authorized to delete this assessment" });
+    }
+
+    // Block deletion if candidate attempts exist
+    const hasAttempts = await Attempt.exists({ assessment: id });
+    if (hasAttempts) {
+      return res.status(409).json({
+        success: false,
+        message: "Cannot delete assessment because candidate attempts exist",
+      });
     }
 
     await assessment.deleteOne();

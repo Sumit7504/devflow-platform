@@ -326,6 +326,24 @@ const updateAssessmentRules = [
   body("description").optional().trim(),
 ];
 
+// ── Attempt rules ────────────────────────────────────────────────────────────
+const startAttemptRules = [
+  body("assessmentId")
+    .notEmpty().withMessage("assessmentId is required")
+    .custom((val) => mongoose.Types.ObjectId.isValid(val))
+    .withMessage("assessmentId must be a valid ID"),
+];
+
+const submitAttemptRules = [
+  body("answers")
+    .isArray().withMessage("answers must be an array"),
+];
+
+const gradeAttemptRules = [
+  body("grades")
+    .isArray({ min: 1 }).withMessage("grades must be a non-empty array"),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -338,4 +356,7 @@ module.exports = {
   statusChangeRules,
   assessmentRules,
   updateAssessmentRules,
+  startAttemptRules,
+  submitAttemptRules,
+  gradeAttemptRules,
 };

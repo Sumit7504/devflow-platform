@@ -9,6 +9,7 @@ const companyRouter = require("./routes/companies");
 const jobRouter         = require("./routes/jobs");
 const applicationRouter = require("./routes/applications");
 const assessmentRouter  = require("./routes/assessments");
+const attemptRouter     = require("./routes/attempts");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -28,6 +29,7 @@ app.use("/api/companies", companyRouter);
 app.use("/api/jobs", jobRouter);
 app.use("/api/applications", applicationRouter);
 app.use("/api/assessments",  assessmentRouter);
+app.use("/api/attempts",     attemptRouter);
 
 // ── Error Handling (must come last) ───────────────────────────────────────────
 app.use(notFound);       // 404 — no route matched

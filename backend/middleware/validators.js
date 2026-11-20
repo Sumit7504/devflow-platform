@@ -344,6 +344,56 @@ const gradeAttemptRules = [
     .isArray({ min: 1 }).withMessage("grades must be a non-empty array"),
 ];
 
+// ── Interview rules ──────────────────────────────────────────────────────────
+const INTERVIEW_MODES = ["online", "onsite", "phone"];
+
+const createInterviewRules = [
+  body("applicationId")
+    .notEmpty().withMessage("applicationId is required")
+    .custom((val) => mongoose.Types.ObjectId.isValid(val))
+    .withMessage("applicationId must be a valid ID"),
+
+  body("mode")
+    .notEmpty().withMessage("mode is required")
+    .isIn(INTERVIEW_MODES)
+    .withMessage(`mode must be one of: ${INTERVIEW_MODES.join(", ")}`),
+
+  body("meetingLink")
+    .if(body("mode").equals("online"))
+    .trim()
+    .notEmpty().withMessage("meetingLink is required for online interviews")
+    .isURL({ require_protocol: true }).withMessage("meetingLink must be a valid URL (include http/https)"),
+
+  body("location")
+    .if(body("mode").equals("onsite"))
+    .trim()
+    .notEmpty().withMessage("location is required for onsite interviews"),
+
+  body("notes")
+    .optional()
+    .trim()
+    .isLength({ max: 1000 }).withMessage("notes cannot exceed 1000 characters"),
+
+  body("slots")
+    .isArray({ min: 1, max: 5 })
+    .withMessage("slots must be an array of 1 to 5 slot objects"),
+
+  body("slots.*.start")
+    .notEmpty().withMessage("slot start is required")
+    .isISO8601().withMessage("slot start must be a valid ISO 8601 date"),
+
+  body("slots.*.end")
+    .notEmpty().withMessage("slot end is required")
+    .isISO8601().withMessage("slot end must be a valid ISO 8601 date"),
+];
+
+const confirmInterviewRules = [
+  body("slotIndex")
+    .notEmpty().withMessage("slotIndex is required")
+    .isInt({ min: 0 })
+    .withMessage("slotIndex must be an integer >= 0"),
+];
+
 module.exports = {
   validate,
   registerRules,
@@ -359,4 +409,6 @@ module.exports = {
   startAttemptRules,
   submitAttemptRules,
   gradeAttemptRules,
+  createInterviewRules,
+  confirmInterviewRules,
 };

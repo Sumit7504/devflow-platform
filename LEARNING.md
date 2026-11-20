@@ -4,6 +4,76 @@ A running log of every phase: what was built, what each file does, and why it ex
 
 ---
 
+## Phase 3e — Interview Scheduling
+
+### Goal
+Enable recruiters to propose interview schedules with up to 5 time slots for shortlisted candidates, and allow candidates to confirm or decline proposed slots. Enforces conflict-free confirmed calendars across recruiters and candidates, guards against double-booking and stale status transitions using atomic queries, and prepares status hooks for real-time notifications.
+
+---
+
+### Files Created
+
+#### `backend/models/Interview.js`
+Mongoose schema modeling interview scheduling:
+- **`application`, `job`, `candidate`, `recruiter`**: References linking the interview to the application pipeline and involved parties.
+- **`mode`**: Enum (`"online"`, `"onsite"`, `"phone"`).
+- **`meetingLink` & `location`**: Mode-specific connection details (validated: online requires `meetingLink`, onsite requires `location`).
+- **`proposedSlots`**: Array of 1 to 5 time windows (`{ start: Date, end: Date }`).
+- **`selectedSlot`**: The specific `{ start, end }` chosen by the candidate upon confirmation.
+- **`status`**: State machine (`"proposed"` → `"confirmed"` / `"declined"` / `"cancelled"`).
+- **`statusHistory`**: Audit trail recording `{ status, changedAt, changedBy }` initialized on creation and updated on every state transition.
+- **Partial Unique Index**: `{ application: 1 }` with `partialFilterExpression: { status: { $in: ["proposed", "confirmed"] } }` strictly enforces at the database level that an application can have at most one active interview at any time.
+
+#### `backend/controllers/interviewController.js`
+Complete interview lifecycle management with conflict detection and atomic transitions:
+- **`createInterview`**:
+  - Verifies recruiter ownership of the application's job.
+  - Enforces that the application is currently `"shortlisted"` (400 if not).
+  - Validates proposed slots: ISO 8601 dates, future start times, end after start, duration between 15 and 240 minutes.
+  - Ensures proposed slots do not overlap each other.
+  - Validates that none of the proposed slots conflict with any existing confirmed `selectedSlot` of either the recruiter or the candidate (409 if conflict).
+  - Automatically binds `candidate`, `job`, and `recruiter` from server state.
+  - Appends the initial `"proposed"` status history entry.
+- **`confirmInterview`**:
+  - Re-verifies that the candidate's application is still `"shortlisted"` (preventing confirmation if application was rejected/hired in the interim).
+  - Validates `slotIndex` within proposed slots.
+  - Confirms the chosen slot is still in the future.
+  - Re-checks for calendar conflicts against newly confirmed interviews for both candidate and recruiter (409 if a conflict arose).
+  - Atomically transitions status to `"confirmed"`, sets `selectedSlot`, and appends to `statusHistory` in a single `findOneAndUpdate({ _id, candidate, status: "proposed" })` call, eliminating race conditions.
+- **`declineInterview`**:
+  - Atomically transitions status from `"proposed"` to `"declined"` and appends to `statusHistory`.
+- **`cancelInterview`**:
+  - Atomically transitions status from `["proposed", "confirmed"]` to `"cancelled"` and appends to `statusHistory`.
+- **`getRecruiterInterviews`**:
+  - Lists recruiter's interviews, newest first, paginated, with candidate `name` and `email` and job `title`. Supports `?status=` filtering.
+- **`getCandidateInterviews`**:
+  - Lists candidate's interviews, newest first, populating job `title`, company `name`, and recruiter `name` and `email`.
+- **`getInterviewById`**:
+  - View a single interview with access restricted to the owning candidate or recruiter. Populates candidate and recruiter `name` and `email`.
+
+#### `backend/routes/interviews.js`
+Mounted under `/api/interviews`:
+- `POST /` (Recruiter only)
+- `GET /recruiter` (Recruiter only; declared before `/:id`)
+- `GET /my` (Candidate only; declared before `/:id`)
+- `PATCH /:id/confirm` (Candidate only)
+- `PATCH /:id/decline` (Candidate only)
+- `PATCH /:id/cancel` (Recruiter only)
+- `GET /:id` (Candidate owner or recruiter owner)
+
+---
+
+### Files Modified
+
+#### `backend/middleware/validators.js`
+- Added `createInterviewRules` (mode validation, conditional meetingLink/location requirements, slot array bounds and ISO 8601 date validation).
+- Added `confirmInterviewRules` (slotIndex validation).
+
+#### `backend/server.js`
+- Mounted `interviewRouter` at `/api/interviews`.
+
+---
+
 ## Phase 3d-2 — Attempts, Submission & Grading
 
 ### Goal

@@ -21,3 +21,12 @@ frontend/ -> React app
 ## Learning rule
 After finishing each phase, add a section to LEARNING.md explaining
 every file you created in simple words (what it does and why it exists).
+
+## Design rules
+- Light, simple, professional look. Use one accent color only.
+- Colors: accent #0F766E (teal), background #F8FAFC, cards white,
+  borders #E5E7EB, text #111827, gray text #5B6472.
+- Font: Inter.
+- Cards: white, thin border, rounded corners (12px), no shadows.
+- Inputs 44px tall, buttons rounded (8px). Main button uses the accent color.
+- No gradients, no emoji, no extra colors.

@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
@@ -19,36 +19,52 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="nav-brand">
-        <span>DevFlow</span>
-      </Link>
+      <div className="navbar-inner">
+        <div className="nav-left">
+          <Link to="/" className="nav-brand">
+            DevFlow
+          </Link>
 
-      <div className="nav-links">
-        <Link to="/">Home</Link>
-
-        {isAuthenticated && user ? (
-          <>
-            <Link to={getDashboardPath(user.role)}>Dashboard</Link>
-            <span className={`badge badge-${user.role}`}>{user.role}</span>
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              {user.name}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="btn btn-outline"
-              style={{ padding: "0.3rem 0.75rem", fontSize: "0.8rem" }}
+          <div className="nav-links">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
-              Logout
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login">Login</Link>
-            <Link to="/register" className="btn btn-primary" style={{ color: "white" }}>
-              Register
-            </Link>
-          </>
-        )}
+              Home
+            </NavLink>
+
+            {isAuthenticated && user && (
+              <NavLink
+                to={getDashboardPath(user.role)}
+                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+              >
+                Dashboard
+              </NavLink>
+            )}
+          </div>
+        </div>
+
+        <div className="nav-right">
+          {isAuthenticated && user ? (
+            <>
+              <span className="nav-user">{user.name}</span>
+              <span className="badge-tag">{user.role}</span>
+              <button onClick={handleLogout} className="btn btn-outline">
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="nav-link">
+                Sign in
+              </Link>
+              <Link to="/register" className="btn btn-primary" style={{ height: "38px" }}>
+                Create account
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );

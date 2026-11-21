@@ -97,7 +97,11 @@ Central route configuration declaring public routes, protected role dashboards, 
 Application root wrapped in `BrowserRouter` and `AuthProvider`.
 
 #### `frontend/src/index.css`
-Lightweight modern styles for forms, validation states, alerts, navigation, and badges.
+Design token foundation and layout system enforcing the strict design specification:
+- **Design Tokens**: Defined in `:root` CSS variables (`--color-accent: #0f766e`, `--color-bg: #f8fafc`, `--color-card: #ffffff`, `--color-border: #e5e7eb`, `--color-text: #111827`, `--color-text-gray: #5b6472`).
+- **Typography**: Inter font with sizes and line-heights matching design mocks.
+- **Card and Button Geometry**: White cards with 12px border radius, thin 1px `#e5e7eb` border, and strictly zero box shadows. Inputs (44px) and buttons (8px radius) using the single accent color `#0f766e`.
+- **Layout Alignment**: Aligned `Login.jsx` and `Register.jsx` to match the exact spacing, typography, and card structure from `docs/desgin/Login.png`, with top brand text, bold titles, subtitle, and full-width actions without emojis or gradients.
 
 #### `frontend/package.json` & `frontend/vite.config.js`
 Configuration for Vite + React with `react-router-dom` and `axios`.

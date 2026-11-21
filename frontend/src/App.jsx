@@ -12,9 +12,8 @@ function AppContent() {
       <Navbar />
 
       {serverError && (
-        <div style={{ maxWidth: "1000px", margin: "1rem auto 0", padding: "0 1rem", width: "100%" }}>
-          <div className="alert alert-warning">
-            <span>⚠️</span>
+        <div style={{ maxWidth: "1100px", margin: "1rem auto 0", padding: "0 1rem", width: "100%" }}>
+          <div className="alert alert-danger" style={{ margin: 0 }}>
             <span>{serverError}</span>
           </div>
         </div>

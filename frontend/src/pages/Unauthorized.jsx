@@ -12,21 +12,21 @@ export default function Unauthorized() {
   };
 
   return (
-    <div className="card" style={{ maxWidth: "540px", margin: "3rem auto", textAlign: "center" }}>
-      <h2 style={{ fontSize: "1.75rem", color: "var(--danger)", marginBottom: "0.75rem" }}>
-        403 — Access Denied
-      </h2>
-      <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-        You do not have the required permissions to access this page with your current role.
+    <div className="card" style={{ maxWidth: "500px", margin: "3rem auto", textAlign: "center", padding: "2.5rem 2rem" }}>
+      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.75rem", color: "var(--color-text)" }}>
+        Access denied
+      </h1>
+      <p style={{ color: "var(--color-text-gray)", fontSize: "0.875rem", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+        You do not have permission to view this page with your current role.
       </p>
 
-      <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
         <Link to="/" className="btn btn-outline">
-          Back to Home
+          Back to home
         </Link>
         {user && (
-          <Link to={getDashboardPath(user.role)} className="btn btn-primary" style={{ color: "white" }}>
-            Go to Your Dashboard
+          <Link to={getDashboardPath(user.role)} className="btn btn-primary">
+            Go to dashboard
           </Link>
         )}
       </div>

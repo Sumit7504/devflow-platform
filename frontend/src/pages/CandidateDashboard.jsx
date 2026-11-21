@@ -6,20 +6,17 @@ export default function CandidateDashboard() {
 
   return (
     <div>
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <h2 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>
-              Candidate Dashboard
-            </h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              Welcome back, {user?.name} ({user?.email})
-            </p>
-          </div>
-          <span className="badge badge-candidate">Candidate</span>
-        </div>
+      <div className="page-header">
+        <h1 className="page-title">Candidate dashboard</h1>
+        <p className="page-subtitle">Welcome back, {user?.name}</p>
+      </div>
 
-        <p style={{ color: "var(--text-muted)" }}>
+      <div className="card">
+        <div className="card-header-clean">
+          <h2 style={{ fontSize: "1.125rem", fontWeight: 600 }}>Overview</h2>
+          <span className="badge-tag">Candidate</span>
+        </div>
+        <p style={{ color: "var(--color-text-gray)", fontSize: "0.875rem", lineHeight: 1.5 }}>
           Browse open job postings, take skill assessments, and track your active job applications.
         </p>
       </div>

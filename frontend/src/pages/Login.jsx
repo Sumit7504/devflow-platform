@@ -64,7 +64,7 @@ export default function Login() {
           setFieldErrors(mapped);
         } else {
           // 400, 401, 403, etc.
-          setGeneralError(respData.message || "Login failed. Please check your credentials.");
+          setGeneralError(respData.message || "Invalid email or password.");
         }
       } else {
         setGeneralError("Unable to reach server. Please check your network connection.");
@@ -75,68 +75,69 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-card">
-      <div className="auth-header">
-        <h2>Sign In to DevFlow</h2>
-        <p>Enter your credentials to access your account</p>
+    <div className="auth-wrapper">
+      <div className="auth-card">
+        <div className="auth-brand">DevFlow</div>
+        <h1 className="auth-title">Sign in</h1>
+        <p className="auth-subtitle">Hiring and assessments in one place.</p>
+
+        {generalError && <div className="alert alert-danger">{generalError}</div>}
+
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="form-group">
+            <label className="form-label" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              className={`form-control ${fieldErrors.email ? "is-invalid" : ""}`}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="email"
+              disabled={isSubmitting}
+              required
+            />
+            {fieldErrors.email && (
+              <span className="field-error">{fieldErrors.email}</span>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              className={`form-control ${fieldErrors.password ? "is-invalid" : ""}`}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              disabled={isSubmitting}
+              required
+            />
+            {fieldErrors.password && (
+              <span className="field-error">{fieldErrors.password}</span>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ width: "100%", marginTop: "0.25rem" }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          New here? <Link to="/register">Create an account</Link>
+        </p>
       </div>
-
-      {generalError && <div className="alert alert-danger">{generalError}</div>}
-
-      <form onSubmit={handleSubmit} noValidate>
-        <div className="form-group">
-          <label className="form-label" htmlFor="email">
-            Email Address
-          </label>
-          <input
-            id="email"
-            type="email"
-            className={`form-control ${fieldErrors.email ? "is-invalid" : ""}`}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.email && (
-            <span className="field-error">{fieldErrors.email}</span>
-          )}
-        </div>
-
-        <div className="form-group">
-          <label className="form-label" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            className={`form-control ${fieldErrors.password ? "is-invalid" : ""}`}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            disabled={isSubmitting}
-            required
-          />
-          {fieldErrors.password && (
-            <span className="field-error">{fieldErrors.password}</span>
-          )}
-        </div>
-
-        <button
-          type="submit"
-          className="btn btn-primary"
-          style={{ width: "100%", marginTop: "0.5rem" }}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Signing in..." : "Sign In"}
-        </button>
-      </form>
-
-      <p style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
-        Don't have an account? <Link to="/register">Create an account</Link>
-      </p>
     </div>
   );
 }

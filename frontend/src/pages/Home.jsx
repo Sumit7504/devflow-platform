@@ -12,31 +12,30 @@ export default function Home() {
   };
 
   return (
-    <div className="card" style={{ maxWidth: "680px", margin: "2rem auto", textAlign: "center" }}>
-      <h1 style={{ fontSize: "2rem", marginBottom: "1rem", color: "var(--primary)" }}>
-        DevFlow Platform
+    <div className="card" style={{ maxWidth: "560px", margin: "3rem auto", textAlign: "center", padding: "2.5rem 2rem" }}>
+      <h1 style={{ fontSize: "1.75rem", fontWeight: 700, marginBottom: "0.5rem", color: "var(--color-text)" }}>
+        DevFlow
       </h1>
-      <p style={{ color: "var(--text-muted)", fontSize: "1.1rem", marginBottom: "2rem" }}>
-        Modern hiring, assessment and real-time collaboration for engineering teams and candidates.
+      <p style={{ color: "var(--color-text-gray)", fontSize: "0.9375rem", lineHeight: 1.6, marginBottom: "2rem" }}>
+        Hiring and assessments in one place. Streamlined workflows for candidates, recruiters, and administrators.
       </p>
 
       {isAuthenticated && user ? (
-        <div style={{ background: "#f8fafc", padding: "1.5rem", borderRadius: "var(--radius)" }}>
-          <p style={{ marginBottom: "1rem", fontSize: "1rem" }}>
-            Welcome back, <strong>{user.name}</strong>! You are logged in as a{" "}
-            <span className={`badge badge-${user.role}`}>{user.role}</span>.
+        <div style={{ background: "var(--color-bg)", padding: "1.25rem", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
+          <p style={{ marginBottom: "1rem", fontSize: "0.875rem", color: "var(--color-text)" }}>
+            Signed in as <strong>{user.name}</strong> ({user.role}).
           </p>
           <Link to={getDashboardPath(user.role)} className="btn btn-primary">
-            Go to Your Dashboard →
+            Go to dashboard
           </Link>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-          <Link to="/login" className="btn btn-outline" style={{ padding: "0.6rem 1.5rem" }}>
-            Sign In
+        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+          <Link to="/login" className="btn btn-outline" style={{ minWidth: "120px" }}>
+            Sign in
           </Link>
-          <Link to="/register" className="btn btn-primary" style={{ padding: "0.6rem 1.5rem", color: "white" }}>
-            Create Account
+          <Link to="/register" className="btn btn-primary" style={{ minWidth: "140px" }}>
+            Create account
           </Link>
         </div>
       )}

@@ -6,20 +6,17 @@ export default function RecruiterDashboard() {
 
   return (
     <div>
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <h2 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>
-              Recruiter Dashboard
-            </h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              Welcome back, {user?.name} ({user?.email})
-            </p>
-          </div>
-          <span className="badge badge-recruiter">Recruiter</span>
-        </div>
+      <div className="page-header">
+        <h1 className="page-title">Recruiter dashboard</h1>
+        <p className="page-subtitle">Welcome back, {user?.name}</p>
+      </div>
 
-        <p style={{ color: "var(--text-muted)" }}>
+      <div className="card">
+        <div className="card-header-clean">
+          <h2 style={{ fontSize: "1.125rem", fontWeight: 600 }}>Overview</h2>
+          <span className="badge-tag">Recruiter</span>
+        </div>
+        <p style={{ color: "var(--color-text-gray)", fontSize: "0.875rem", lineHeight: 1.5 }}>
           Manage your company profile, post job openings, review candidate applications, and schedule interviews.
         </p>
       </div>

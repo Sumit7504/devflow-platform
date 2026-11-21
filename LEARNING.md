@@ -324,6 +324,138 @@ Added CSS classes for pill filter tabs (`.tabs-bar`, `.tab-btn`), data tables (`
 
 ---
 
+## Phase 5d-1 — Assessment Pages (Candidate & Recruiter)
+
+### Goal
+Provide end-to-end technical assessment workflows for candidates and recruiters. Candidates can review assessment details, take timed tests with MCQs and code questions matching the layout in `docs/desgin/Candidate Assessment.png`, view past attempts, and inspect scores/feedback. Recruiters can create, configure, edit, and delete job assessments, inspect candidate attempt submissions across status tabs, and manually grade code questions with points and feedback.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Countdown Timer Architecture: Server Offset vs. Local Clock Drift
+Candidate assessments are strictly time-bound. However, relying purely on the candidate's browser clock (`Date.now()`) is vulnerable to machine clock discrepancies (e.g. if the user's laptop clock is set fast or slow by 5 minutes).
+- **Server Offset Calculation**: When loading attempt data from `GET /api/attempts/:id`, the frontend inspects the HTTP response `Date` header returned by Express:
+  `serverOffset = new Date(res.headers.date).getTime() - Date.now()`
+- **Immune Countdown**: The remaining seconds until deadline are computed using:
+  `remainingMs = new Date(deadline).getTime() - (Date.now() + serverOffset)`
+- **Isolated Component (`CountdownTimer.jsx`)**: Ticking every 1,000ms is encapsulated in its own component so timer re-renders do not cause re-renders of the large question/code form state.
+- **Screen Reader Urgency Notifications**: To avoid constant screen-reader chatter, `aria-live="polite"` announcements fire selectively only at the critical urgency thresholds (5-minute and 1-minute warnings).
+- **Race Condition Prevention**: A mutable React ref (`hasSubmittedRef`) prevents duplicate triggers if a candidate clicks "Submit" at the exact moment the timer expires and calls `onExpire()`.
+- **Cleanup**: The beforeunload warning listener and ticker intervals are immediately stopped upon submission.
+
+#### 2. Dynamic Form List Management: Stable Keys & Option Index Synchronization
+Assessment creation (`RecruiterAssessmentManage.jsx`) allows dynamically adding, removing, and reordering questions and MCQ options:
+- **Stable Keys**: Instead of using array indices as React keys (which causes state leakage and focus bugs when items are deleted), each question and option is assigned an immutable client ID (`q_...` and `opt_...`).
+- **Option Synchronization**: If a recruiter removes or rearranges options for an MCQ question, the zero-based `correctOption` index is automatically adjusted or reset if it falls out of range.
+- **Clean Type Switching**: Switching a question from `mcq` to `code` automatically purges option arrays and resets `correctOption` to null so invalid payload attributes are not sent to the API.
+- **Unsaved Changes Shield**: An `onbeforeunload` listener warns recruiters if they attempt to navigate away with unsaved assessment edits.
+
+#### 3. Security: Client Answer Privacy & Server-Side Score Authority
+- **Zero Question Leaks in Test Mode**: When a candidate takes an active attempt (`in_progress`), `GET /api/attempts/:id` strictly omits `correctOption` from the response payload. Candidates cannot inspect React state or network inspector tabs to extract answers.
+- **Zero Client-Side Score Calculations**: The candidate's client never calculates or submits scores. It submits only candidate answers (`{ answers: [{ questionId, selectedOption, codeAnswer }] }`).
+- **Server Evaluation**: Objective MCQ questions are graded server-side during `POST /api/attempts/:id/submit`. Subjective code questions are graded by recruiters via `PATCH /api/attempts/:id/grade`. The recruiter grading form sends only grades for code questions (`{ grades: [{ questionId, points, feedback }] }`), preventing inadvertent tampering with automated MCQ scores.
+
+#### 4. Recruiter Mutation Locks (409 Conflict Handling)
+Once candidates begin submitting attempts for an assessment, questions or duration cannot be modified, and the assessment cannot be deleted (which would orphan or corrupt historical attempt records):
+- The recruiter UI probes `GET /api/attempts/assessment/:id?limit=1` to detect whether attempts already exist.
+- If attempts exist, question editing and assessment deletion controls are safely disabled with clear explanatory tooltips, and any backend 409 Conflict response is gracefully handled.
+
+---
+
+### Backend Enhancements
+
+#### `backend/controllers/attemptController.js`
+Updated `myAttempts` controller:
+- Populated `assessment` and `job` ObjectIds in each item of `GET /api/attempts/my` so the candidate frontend can link back to specific jobs and assessment intro pages.
+
+#### `backend/test_phase3d2.ps1`
+Updated Test 4 to assert that `assessment` and `job` identifiers are present in candidate attempt history entries.
+
+---
+
+### Frontend Files Created
+
+#### `frontend/src/components/common/CountdownTimer.jsx`
+Self-contained countdown timer component:
+- Computes remaining seconds with server clock offset compensation.
+- Displays `MM:SS` (or `H:MM:SS`) using design token classes (`.timer-badge`, `.timer-badge-danger`).
+- Uses `aria-live="polite"` only when crossing the 5-minute and 1-minute warning thresholds.
+- Triggers `onExpire()` once the deadline is reached, guarded against multiple firings.
+
+#### `frontend/src/pages/CandidateAssessmentIntro.jsx`
+Introductory assessment landing page (`/candidate/jobs/:jobId/assessment`):
+- Fetches assessment details (`GET /api/assessments/job/:jobId`) and candidate attempt history (`GET /api/attempts/my`).
+- Displays assessment title, instructions, duration in minutes, total points, and total questions.
+- If an attempt already exists, provides a direct link to view that attempt instead of starting a new one.
+- "Start Assessment" button triggers `POST /api/attempts/start` and routes directly to the test-taking view.
+- Displays helpful error cards on 404 (no assessment created) or 403 (unauthorized/rejected application).
+
+#### `frontend/src/pages/CandidateAttemptView.jsx`
+Unified candidate test-taking and result inspection page (`/candidate/attempts/:id`):
+- **Test-Taking Mode (`in_progress`)**:
+  - Displays persistent header with candidate attempt deadline and live countdown timer.
+  - Warns candidate that unsaved answers are lost on browser refresh.
+  - Renders MCQ options as interactive radio cards and code questions in a monospace textarea with character count.
+  - Accessible inline confirmation for manual submission.
+  - Calls `POST /api/attempts/:id/submit` and transitions to completed results.
+- **Result Mode (`submitted` / `graded`)**:
+  - Displays status badge, total score, percentage, and time taken.
+  - Shows breakdown of points earned per question and recruiter qualitative feedback.
+  - Handles 403 responses gracefully if candidate was subsequently rejected, still showing summary results.
+
+#### `frontend/src/pages/CandidateAttemptList.jsx`
+Candidate attempt history dashboard (`/candidate/attempts`):
+- Fetches all candidate attempts via `GET /api/attempts/my`.
+- Lists attempt date, job title, assessment name, status badge, and score.
+- Provides direct links to resume active attempts or review finished results.
+
+#### `frontend/src/pages/RecruiterAssessmentManage.jsx`
+Assessment management workspace for recruiters (`/recruiter/jobs/:id/assessment`):
+- Fetches existing assessment for the job or displays an initial setup form.
+- Verifies job ownership via `GET /api/jobs/:id`.
+- Dynamic question manager supporting both MCQ and code question types with stable client keys.
+- Probes existing attempts to guard against invalid mutations (preventing 409 errors).
+- Accessible inline confirmation for deleting an assessment (`DELETE /api/assessments/:id`).
+- Form validations: requires question title, positive points, minimum 2 options for MCQs, and selected correct option.
+
+#### `frontend/src/pages/RecruiterAssessmentAttempts.jsx`
+Assessment submissions table for recruiters (`/recruiter/assessments/:assessmentId/attempts`):
+- Status tabs (`All`, `In Progress`, `Submitted`, `Graded`) synchronized with URL query params.
+- Displays candidate name, submission date, score, status badge, and action link to grade or view attempt.
+
+#### `frontend/src/pages/RecruiterAttemptDetail.jsx`
+Recruiter grading and evaluation view (`/recruiter/attempts/:id`):
+- Displays candidate answers side-by-side with question definitions.
+- Highlights candidate's selected MCQ option and correct answer.
+- Renders submitted code in formatted code blocks.
+- Provides grading form for code questions allowing recruiters to award points (validated between 0 and maximum points) and leave feedback (`PATCH /api/attempts/:id/grade`).
+- Refetches attempt details upon submission to update status to `graded`.
+
+---
+
+### Frontend Files Modified
+
+#### `frontend/src/components/Navbar.jsx`
+Added `Assessments` link (`/candidate/attempts`) to candidate navigation menu.
+
+#### `frontend/src/pages/JobDetail.jsx`
+Conditionally displays a "Take Assessment" button for candidates who have an active, non-rejected application for the job.
+
+#### `frontend/src/pages/ApplicationDetail.jsx`
+Displays an "Assessment" link if the application is in an active (non-rejected) status.
+
+#### `frontend/src/pages/RecruiterJobList.jsx`
+Added an "Assessment" button to each job card in the recruiter jobs list, linking directly to `/recruiter/jobs/:id/assessment`.
+
+#### `frontend/src/routes/AppRoutes.jsx`
+Registered all candidate and recruiter assessment routes wrapped in their respective `ProtectedRoute` wrappers.
+
+#### `frontend/src/index.css`
+Added styling tokens for timer badges, MCQ option cards, monospace code response boxes, and assessment question cards adhering strictly to the design system.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

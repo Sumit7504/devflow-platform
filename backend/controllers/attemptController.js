@@ -369,6 +369,8 @@ const myAttempts = async (req, res, next) => {
       const deadline = new Date(new Date(a.startedAt).getTime() + duration * 60 * 1000);
       return {
         _id: a._id,
+        assessment: a.assessment ? (a.assessment._id || a.assessment) : null,
+        job: (a.assessment && a.assessment.job) ? (a.assessment.job._id || a.assessment.job) : null,
         assessmentTitle: a.assessment ? a.assessment.title : "Unknown",
         jobTitle: (a.assessment && a.assessment.job) ? a.assessment.job.title : "Unknown",
         status: a.status,

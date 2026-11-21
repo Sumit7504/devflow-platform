@@ -42,6 +42,12 @@ export default function Navbar() {
                 >
                   My applications
                 </NavLink>
+                <NavLink
+                  to="/candidate/attempts"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Assessments
+                </NavLink>
               </>
             )}
 

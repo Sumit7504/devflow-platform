@@ -159,6 +159,10 @@ export default function RecruiterJobList() {
                         Applicants
                       </Link>
 
+                      <Link to={`/recruiter/jobs/${job._id}/assessment`} className="btn btn-outline btn-sm">
+                        Assessment
+                      </Link>
+
                       <Link to={`/recruiter/jobs/${job._id}/edit`} className="btn btn-outline btn-sm">
                         Edit
                       </Link>

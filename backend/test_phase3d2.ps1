@@ -249,7 +249,9 @@ Run-Test 4 "C1 GET /attempts/my: lists attempt with assessmentTitle and jobTitle
     $list = $res.Json.attempts
     $list.Count -ge 1 -and
     $list[0].assessmentTitle -eq "Fullstack Assessment" -and
-    $list[0].jobTitle -eq "Fullstack Engineer"
+    $list[0].jobTitle -eq "Fullstack Engineer" -and
+    $list[0].assessment -eq $assessment1Id -and
+    $list[0].job -eq $jobA1Id
 } | Out-Null
 
 # ── TEST 5: C1 submits with 1 correct MCQ, 1 wrong MCQ, 1 code answer ────────

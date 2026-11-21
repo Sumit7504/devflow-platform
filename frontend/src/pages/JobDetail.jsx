@@ -15,6 +15,7 @@ export default function JobDetail() {
 
   const [job, setJob] = useState(null);
   const [existingApplicationId, setExistingApplicationId] = useState(null);
+  const [hasAssessment, setHasAssessment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -30,6 +31,7 @@ export default function JobDetail() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setHasAssessment(false);
 
     Promise.all([
       client.get(`/jobs/${id}`, { signal: controller.signal }),
@@ -46,6 +48,20 @@ export default function JobDetail() {
           );
           if (matched) {
             setExistingApplicationId(matched._id);
+
+            // Check assessment only if candidate has an application and it is not rejected
+            if (matched.status !== "rejected") {
+              client
+                .get(`/assessments/job/${id}`, { signal: controller.signal })
+                .then((assRes) => {
+                  if (assRes.data?.success && assRes.data.assessment) {
+                    setHasAssessment(true);
+                  }
+                })
+                .catch(() => {
+                  // Silently ignore 404 or 403
+                });
+            }
           }
         }
       })
@@ -274,6 +290,16 @@ export default function JobDetail() {
               >
                 View your application
               </Link>
+
+              {hasAssessment && (
+                <Link
+                  to={`/candidate/jobs/${id}/assessment`}
+                  className="btn btn-outline"
+                  style={{ width: "100%", textAlign: "center", marginTop: "0.5rem" }}
+                >
+                  Skill assessment →
+                </Link>
+              )}
             </div>
           ) : isClosed ? (
             /* Closed Job */

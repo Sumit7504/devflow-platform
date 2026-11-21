@@ -12,6 +12,9 @@ import JobList from "../pages/JobList";
 import JobDetail from "../pages/JobDetail";
 import ApplicationList from "../pages/ApplicationList";
 import ApplicationDetail from "../pages/ApplicationDetail";
+import CandidateAssessmentIntro from "../pages/CandidateAssessmentIntro";
+import CandidateAttemptView from "../pages/CandidateAttemptView";
+import CandidateAttemptList from "../pages/CandidateAttemptList";
 
 import RecruiterDashboard from "../pages/RecruiterDashboard";
 import CompanyProfile from "../pages/CompanyProfile";
@@ -19,6 +22,9 @@ import RecruiterJobList from "../pages/RecruiterJobList";
 import JobForm from "../pages/JobForm";
 import JobApplicants from "../pages/JobApplicants";
 import RecruiterApplicationDetail from "../pages/RecruiterApplicationDetail";
+import RecruiterAssessmentManage from "../pages/RecruiterAssessmentManage";
+import RecruiterAssessmentAttempts from "../pages/RecruiterAssessmentAttempts";
+import RecruiterAttemptDetail from "../pages/RecruiterAttemptDetail";
 
 import AdminDashboard from "../pages/AdminDashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -70,6 +76,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["candidate"]}>
             <ApplicationDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/jobs/:jobId/assessment"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <CandidateAssessmentIntro />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/attempts"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <CandidateAttemptList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/attempts/:id"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <CandidateAttemptView />
           </ProtectedRoute>
         }
       />
@@ -128,6 +158,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["recruiter"]}>
             <RecruiterApplicationDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/jobs/:id/assessment"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterAssessmentManage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/assessments/:assessmentId/attempts"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterAssessmentAttempts />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/attempts/:id"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterAttemptDetail />
           </ProtectedRoute>
         }
       />

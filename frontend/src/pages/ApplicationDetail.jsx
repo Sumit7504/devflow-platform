@@ -10,6 +10,7 @@ export default function ApplicationDetail() {
   const { id } = useParams();
 
   const [application, setApplication] = useState(null);
+  const [hasAssessment, setHasAssessment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -17,12 +18,28 @@ export default function ApplicationDetail() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setHasAssessment(false);
 
     client
       .get(`/applications/${id}`, { signal: controller.signal })
       .then((res) => {
         if (res.data?.success && res.data.application) {
-          setApplication(res.data.application);
+          const app = res.data.application;
+          setApplication(app);
+
+          // Only check assessment if application status is NOT rejected
+          if (app.status !== "rejected" && app.job?._id) {
+            client
+              .get(`/assessments/job/${app.job._id}`, { signal: controller.signal })
+              .then((assRes) => {
+                if (assRes.data?.success && assRes.data.assessment) {
+                  setHasAssessment(true);
+                }
+              })
+              .catch(() => {
+                // Silently ignore 404/403
+              });
+          }
         }
       })
       .catch((err) => {
@@ -73,8 +90,8 @@ export default function ApplicationDetail() {
   // Status history chronologically from oldest to newest
   const history = Array.isArray(application.statusHistory)
     ? [...application.statusHistory].sort(
-        (a, b) => new Date(a.changedAt) - new Date(b.changedAt)
-      )
+      (a, b) => new Date(a.changedAt) - new Date(b.changedAt)
+    )
     : [];
 
   return (
@@ -100,6 +117,11 @@ export default function ApplicationDetail() {
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <StatusBadge status={application.status} />
+          {hasAssessment && application.job?._id && (
+            <Link to={`/candidate/jobs/${application.job._id}/assessment`} className="btn btn-primary btn-sm">
+              Skill assessment
+            </Link>
+          )}
           {application.job?._id && (
             <Link to={`/candidate/jobs/${application.job._id}`} className="btn btn-outline btn-sm">
               View job posting

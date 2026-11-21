@@ -5,10 +5,11 @@ const { register, login, getMe } = require("../controllers/authController");
 const auth = require("../middleware/auth");
 const authorizeRoles = require("../middleware/authorizeRoles");
 const { registerRules, loginRules, validate } = require("../middleware/validators");
+const { loginLimiter, registerLimiter } = require("../middleware/rateLimiters");
 
 // Public routes
-router.post("/register", registerRules, validate, register);
-router.post("/login",    loginRules,    validate, login);
+router.post("/register", registerLimiter, registerRules, validate, register);
+router.post("/login", loginLimiter, loginRules, validate, login);
 
 // Protected — any logged-in user
 router.get("/me", auth, getMe);

@@ -13,6 +13,28 @@ const seed = async () => {
     process.exit(1);
   }
 
+  // In production, reject weak or placeholder admin passwords
+  if (process.env.NODE_ENV === "production") {
+    const trimmed = password.trim();
+    const disallowedPlaceholders = ["replace_with_", "changeme", "change_this", "admin"];
+
+    if (trimmed.length < 12) {
+      console.error("Error: In production, ADMIN_PASSWORD must be at least 12 characters long.");
+      process.exit(1);
+    }
+
+    const hasPlaceholder = disallowedPlaceholders.some((ph) =>
+      trimmed.toLowerCase().includes(ph)
+    );
+
+    if (hasPlaceholder) {
+      console.error(
+        "Error: In production, ADMIN_PASSWORD cannot contain placeholder or trivial values (replace_with_, changeme, change_this, admin)."
+      );
+      process.exit(1);
+    }
+  }
+
   await connectDB();
 
   const existing = await User.findOne({ email: email.toLowerCase().trim() });

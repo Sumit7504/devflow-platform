@@ -1,4 +1,5 @@
 import axios from "axios";
+import { setWakingState, clearWakingState } from "../services/wakingState";
 
 // Single constant for the authentication token key in localStorage
 export const TOKEN_STORAGE_KEY = "devflow_auth_token";
@@ -31,48 +32,105 @@ export const clearStoredToken = () => {
   }
 };
 
+// API base address comes only from VITE_API_URL (no hard-coded localhost in source)
+const rawApiUrl = import.meta.env.VITE_API_URL;
+
+export const API_CONFIG_ERROR =
+  !rawApiUrl || !rawApiUrl.trim()
+    ? (import.meta.env.PROD
+        ? "Configuration error: VITE_API_URL is missing. Please configure VITE_API_URL in your deployment environment."
+        : "Configuration error: VITE_API_URL is missing. Please define VITE_API_URL in your frontend .env file.")
+    : null;
+
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  baseURL: rawApiUrl ? rawApiUrl.trim() : "",
+  timeout: 70000, // 70 seconds timeout for Render cold starts
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// ── Request Interceptor: Attach Bearer Token ──────────────────────────────────
+// ── Request Interceptor: Attach Bearer Token & Start Waking Timer ──────────────
 client.interceptors.request.use(
   (config) => {
     const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Start a 4-second waking timer for GET requests after a quiet period
+    const method = (config.method || "get").toLowerCase();
+    if (method === "get") {
+      config.__wakingTimer = setTimeout(() => {
+        setWakingState({
+          isWaking: true,
+          message: "The server may be waking up, this can take up to a minute",
+          retryHandler: () => client(config),
+        });
+      }, 4000);
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// ── Response Interceptor: Auto-logout on 401 / Account Deactivated 403 ───────
+// ── Response Interceptor: Waking Recovery, Auto-Retry, & Auto-Logout ──────────
 client.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    if (response.config?.__wakingTimer) {
+      clearTimeout(response.config.__wakingTimer);
+    }
+    clearWakingState();
+    return response;
+  },
+  async (error) => {
     const originalRequest = error.config;
-    const url = originalRequest?.url || "";
 
-    // Skip /auth/login and /auth/register so credentials & validation errors
-    // are passed directly to the calling component to show to the user
+    if (originalRequest?.__wakingTimer) {
+      clearTimeout(originalRequest.__wakingTimer);
+    }
+
+    // Check if error qualifies for waking banner (network error, timeout, 502, 503, 504)
+    const isNetworkError = !error.response;
+    const isTimeout = error.code === "ECONNABORTED" || error.message?.includes("timeout");
+    const status = error.response?.status;
+    const isWakingStatus = status === 502 || status === 503 || status === 504;
+
+    if (isNetworkError || isTimeout || isWakingStatus) {
+      setWakingState({
+        isWaking: true,
+        message: "The server may be waking up, this can take up to a minute",
+        retryHandler: () => client(originalRequest),
+      });
+
+      // Auto-retry ONLY for GET requests with backoff; NEVER auto-retry mutations
+      const method = (originalRequest?.method || "get").toLowerCase();
+      if (originalRequest && method === "get") {
+        originalRequest.__retryCount = (originalRequest.__retryCount || 0) + 1;
+        if (originalRequest.__retryCount <= 3) {
+          const delayMs = originalRequest.__retryCount * 2000;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return client(originalRequest);
+        }
+      }
+    }
+
+    // Authentication & Deactivation Interception
+    const url = originalRequest?.url || "";
     const isAuthEndpoint =
       url.includes("/auth/login") || url.includes("/auth/register");
 
     if (!isAuthEndpoint && error.response) {
-      const status = error.response.status;
+      const respStatus = error.response.status;
       const message = error.response.data?.message || "";
 
-      const isUnauthorized = status === 401;
+      const isUnauthorized = respStatus === 401;
       const isDeactivated =
-        status === 403 && message.toLowerCase().includes("deactivated");
+        respStatus === 403 && message.toLowerCase().includes("deactivated");
 
       if (isUnauthorized || isDeactivated) {
         clearStoredToken();
-        // Redirect to login only if not already there
         if (window.location.pathname !== "/login") {
           window.location.href = "/login";
         }

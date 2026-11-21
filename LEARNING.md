@@ -775,6 +775,154 @@ Added CSS classes for notification bell, badge, dropdown container, unread dot, 
 
 ---
 
+## Phase 6a — Production Readiness
+
+### Goal
+Harden the DevFlow backend and frontend for production deployment on modern cloud platforms (Render, Vercel, MongoDB Atlas) without altering business logic or adding unapproved dependencies. Enforce HTTP security headers with `helmet`, configure layered rate limiting with `express-rate-limit`, sanitize CORS origins, validate environment secrets, handle cloud cold starts gracefully, and implement clean server shutdown and error boundaries.
+
+---
+
+### Concepts & Architecture
+
+#### 1. CORS Allow-Lists vs. Open Wildcards
+In local development, `cors()` is often left open to accommodate parallel tooling. In production, allowing any origin (`*`) exposes authenticated endpoints to cross-origin abuse from unauthorized web applications:
+- **Dynamic Allow-List**: `backend/config/cors.js` parses a comma-separated list of allowed URLs from `CLIENT_URL` (e.g. `https://devflow.vercel.app,https://admin.devflow.com`).
+- **Sanitization**: Leading/trailing whitespace and trailing slashes (`/`) are trimmed to prevent subtle origin mismatch errors (e.g. `https://example.com/` vs `https://example.com`).
+- **No-Origin Allowance**: Requests from CLI tools, curl, health probes, and test scripts omit the browser `Origin` header. The CORS delegate explicitly permits requests without an origin while blocking unauthorized browser origins.
+- **Credential Restriction**: To minimize cross-origin exposure, `credentials` is set to `false` because DevFlow relies on `Authorization: Bearer <token>` headers rather than browser cookies. The same allow-list is applied to Socket.IO.
+
+#### 2. Layered Rate Limiting & Brute-Force Defense
+Public endpoints on the open internet are frequent targets for credential stuffing and denial-of-service attacks:
+- **Separate Counters**: `POST /api/auth/login` and `POST /api/auth/register` utilize dedicated rate limiters independent of general API traffic.
+- **Failed Login Counting (`skipSuccessfulRequests: true`)**: Legitimate users who log in successfully do not consume their rate-limit quota. Only *failed* authentication attempts increment the counter (10 failed attempts per 15 minutes per IP), preventing attackers from brute-forcing passwords while avoiding lockouts for valid users.
+- **General API Limiter**: All `/api/*` endpoints share a configurable threshold (~600 requests per 15 minutes). The `/api/health` probe and Socket.IO handshakes bypass rate limiting so monitoring and live connections are never throttled.
+- **Test & Development Bypass**: An environment toggle (`DISABLE_RATE_LIMIT=true` or `NODE_ENV=test`) allows automated integration tests to run without throttling.
+
+#### 3. Reverse Proxies & `trust proxy`
+When deploying on cloud platforms like Render, incoming requests first pass through an internal load balancer or reverse proxy before reaching the Node.js process:
+- By default, Express treats the immediate TCP connection peer (the internal proxy) as the client IP. Without configuration, every user appears to share the same IP, causing rate limiting to throttle all users together.
+- In production (`NODE_ENV === "production"`), setting `app.set("trust proxy", 1)` instructs Express to trust the single reverse proxy layer and inspect `X-Forwarded-For` to determine the true client IP.
+
+#### 4. Startup Environment & Secret Validation
+Missing configuration or weak secrets must fail fast at boot rather than throwing runtime errors under user traffic:
+- **Presence Check**: `backend/config/env.js` verifies that `MONGO_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, and `CLIENT_URL` are non-empty before starting the server.
+- **Production Secret Strength**: In production mode, the server refuses to start if `JWT_SECRET` is shorter than 32 characters or contains default placeholder patterns (`replace_with_`, `changeme`, `change_this`).
+- **Admin Seed Safeguards**: `seedAdmin.js` refuses weak or placeholder admin passwords ($< 12$ characters or trivial strings) in production.
+
+#### 5. Graceful Process Shutdown & Signal Handling
+Abruptly terminating Node.js (`kill -9`) drops in-flight HTTP requests, leaves WebSocket sessions hanging, and abruptly severs MongoDB connection pools:
+- **Orderly Teardown**:
+  1. `io.close()`: Disconnects live Socket.IO clients and ceases broadcasting.
+  2. `server.close()`: Stops accepting new incoming HTTP connections and allows active requests to complete.
+  3. `mongoose.connection.close(false)`: Cleanly closes database connection pools.
+- **Force-Exit Timer & Double-Shutdown Guard**: A 10-second unref'd timer guarantees the process exits if a pending operation hangs, while a boolean flag prevents concurrent shutdown executions on repeated `SIGTERM`/`SIGINT` signals.
+- **Process Exception Handlers**: Global listeners for `unhandledRejection` and `uncaughtException` log the root cause and exit with status code 1.
+
+#### 6. Handling Cloud Cold Starts in the Frontend
+Free-tier hosting providers (e.g. Render) spin down container instances after periods of inactivity:
+- **Detection**: The Axios client sets a 70-second timeout and monitors for network errors, timeouts, or HTTP 502/503/504 gateway status codes.
+- **Waking Notice**: If a GET request takes longer than 4 seconds or fails due to a network outage/gateway error, an accessible (`role="status"`) notification banner appears: *"The server may be waking up, this can take up to a minute"* with a manual Retry button.
+- **Safe Auto-Retry**: Only idempotent `GET` requests are automatically retried with exponential backoff (up to 3 attempts). Mutation requests (`POST`, `PUT`, `PATCH`, `DELETE`) are **never** automatically retried to avoid duplicate transactions.
+
+#### 7. Error Boundaries, Title Sync & Accessibility
+- **React Error Boundary**: Wraps `<AppRoutes />` so uncaught component rendering exceptions present a friendly fallback card with a "Reload application" button instead of a blank screen. It automatically resets its error state on route transitions (`useLocation()`).
+- **Dynamic Document Titles & Favicon**: Synchronizes `document.title` on every route transition (e.g. `DevFlow — Browse Jobs`) and provides a branded SVG favicon and meta description in `index.html`.
+- **Visible Keyboard Focus Rings**: `:focus-visible` styles use `2px solid var(--color-accent)` with `2px` offset on all buttons, links, and inputs.
+
+---
+
+### Files Created
+
+#### `backend/config/env.js`
+Validates required environment variables at server boot and enforces 32-character minimums and placeholder rejection for `JWT_SECRET` in production.
+
+#### `backend/config/cors.js`
+Constructs a sanitized CORS allow-list from `CLIENT_URL`, permitting requests with no `Origin` header while rejecting unauthorized browser origins without wildcards or credentials.
+
+#### `backend/middleware/rateLimiters.js`
+Configures separate rate limiters for `generalLimiter` (~600 req/15min across `/api`), `loginLimiter` (10 failed attempts/15min via `skipSuccessfulRequests: true`), and `registerLimiter` (10 req/15min), with an environment bypass switch for testing.
+
+#### `frontend/vercel.json`
+Declares single-page application URL rewrites routing all subpaths to `/index.html` on Vercel deployments.
+
+#### `frontend/src/services/wakingState.js`
+Event bus managing subscription and state updates for cloud server cold-start alerts and retry handlers.
+
+#### `frontend/src/components/common/ServerWakingBanner.jsx`
+Accessible top banner (`role="status"`) notifying users when cloud instances are waking up, featuring a manual Retry action.
+
+#### `frontend/src/components/common/ErrorBoundary.jsx`
+Class-based React Error Boundary with `componentDidCatch` and route-change automatic reset via `useLocation`.
+
+#### `frontend/src/components/common/RouteTitle.jsx`
+Dynamic document title synchronization hook responding to location changes.
+
+#### `frontend/public/favicon.svg`
+Branded platform SVG favicon styled with the `#0F766E` accent color.
+
+#### `docs/screenshots/.gitkeep`
+Preserves the documentation screenshots folder in version control.
+
+#### `.gitignore` (Root)
+Safeguards root directory from committing `.env`, `node_modules`, and OS files.
+
+#### `README.md`
+Comprehensive platform documentation including role features, tech stack, Mermaid architecture diagram, folder structure, local setup instructions, environment variables reference, security design, main API routes table, and known limitations.
+
+---
+
+### Files Modified
+
+#### `backend/package.json`
+Added `helmet` and `express-rate-limit` dependencies and declared `"engines": { "node": ">=22.17.0" }`.
+
+#### `backend/server.js`
+Integrated environment validation, production `trust proxy`, helmet security headers, sanitized CORS options, 100kb body limits with error interception, graceful shutdown, and process exception handlers.
+
+#### `backend/socket.js`
+Applied sanitized CORS allow-list delegate to Socket.IO server and exported `close(cb)` for graceful shutdown.
+
+#### `backend/config/db.js`
+Added `serverSelectionTimeoutMS: 5000` to prevent hung connections during database outages.
+
+#### `backend/routes/health.js`
+Cheap liveness and readiness probe checking `mongoose.connection.readyState` without running DB queries, returning HTTP 200 (healthy) or HTTP 503 (degraded).
+
+#### `backend/routes/auth.js`
+Mounted `loginLimiter` on `POST /login` and `registerLimiter` on `POST /register`.
+
+#### `backend/middleware/errorHandler.js`
+Sanitized 5xx error messages to `"Internal Server Error"` in production, retained clear 4xx messages, and handled body-parser 413 and 400 errors.
+
+#### `backend/scripts/seedAdmin.js`
+Enforced password strength validation ($\ge 12$ characters, no placeholder strings) in production mode.
+
+#### `backend/.env.example`
+Updated with complete documentation and safe example values for all backend environment variables.
+
+#### `frontend/.env.example`
+Documented `VITE_API_URL` and `VITE_SOCKET_URL` variables.
+
+#### `frontend/index.html`
+Added SVG favicon link, meta description, and default title.
+
+#### `frontend/src/api/client.js`
+Enforced `VITE_API_URL` configuration check, added 70s timeout, cold-start waking detection, and safe auto-retry for GET requests only.
+
+#### `frontend/src/socket/index.js`
+Removed hardcoded localhost fallbacks, reading strictly from environment variables.
+
+#### `frontend/src/utils/formatters.js`
+Enhanced `getErrorMessage` to provide clear, actionable descriptions for HTTP 429 rate limit errors, timeouts, and gateway errors.
+
+#### `frontend/src/App.jsx`
+Integrated deployment configuration error check, `RouteTitle`, `ServerWakingBanner`, and `ErrorBoundary`.
+
+#### `frontend/src/index.css`
+Added `:focus-visible` outline styles with existing accent color, plus styling for waking banners and error boundaries.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

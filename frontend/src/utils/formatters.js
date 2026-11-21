@@ -72,7 +72,16 @@ export function getErrorMessage(err, fallback = "An unexpected error occurred.")
   // Ignore aborted / canceled requests
   if (err.name === "CanceledError" || err.code === "ERR_CANCELED") return null;
   if (!err.response) {
+    if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+      return "The request timed out. The server may be waking up, please try again.";
+    }
     return "Unable to reach server. Please check your network connection.";
+  }
+  if (err.response.status === 429) {
+    return err.response.data?.message || "Too many requests. Please slow down and try again later.";
+  }
+  if ([502, 503, 504].includes(err.response.status)) {
+    return err.response.data?.message || "The server is temporarily unavailable or waking up. Please try again in a moment.";
   }
   return err.response.data?.message || fallback;
 }

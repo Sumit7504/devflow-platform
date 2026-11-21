@@ -1,15 +1,27 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const User = require("./models/User");
+const { getAllowedOrigins } = require("./config/cors");
 
 let io = null;
 
 const init = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:5173",
-      methods: ["GET", "POST", "PATCH", "DELETE"],
-      credentials: true,
+      origin: (origin, callback) => {
+        // Allow requests with no Origin header
+        if (!origin) {
+          return callback(null, true);
+        }
+        const normalized = origin.trim().replace(/\/+$/, "");
+        const allowed = getAllowedOrigins();
+        if (allowed.includes(normalized)) {
+          return callback(null, true);
+        }
+        return callback(new Error("CORS policy: Not allowed by Socket.IO CORS"));
+      },
+      methods: ["GET", "POST"],
+      credentials: false,
     },
   });
 
@@ -46,8 +58,6 @@ const init = (httpServer) => {
     const userRoom = `user:${socket.user._id}`;
     socket.join(userRoom);
 
-    // Clients cannot emit notification creation events.
-    // The server is strictly the sole producer and publisher of notifications.
     socket.on("disconnect", () => {
       // Room departure handled automatically by socket.io upon disconnect
     });
@@ -63,7 +73,16 @@ const getIO = () => {
   return io;
 };
 
+const close = (callback) => {
+  if (io) {
+    io.close(callback);
+  } else if (callback) {
+    callback();
+  }
+};
+
 module.exports = {
   init,
   getIO,
+  close,
 };

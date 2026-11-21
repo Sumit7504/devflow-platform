@@ -5,12 +5,29 @@ import { NotificationProvider } from "./context/NotificationContext";
 import Navbar from "./components/Navbar";
 import AppRoutes from "./routes/AppRoutes";
 import NotificationToast from "./components/notifications/NotificationToast";
+import ServerWakingBanner from "./components/common/ServerWakingBanner";
+import ErrorBoundary from "./components/common/ErrorBoundary";
+import RouteTitle from "./components/common/RouteTitle";
+import { API_CONFIG_ERROR } from "./api/client";
 
 function AppContent() {
   const { serverError } = useAuth();
 
+  if (API_CONFIG_ERROR) {
+    return (
+      <div className="config-error-wrapper" role="alert">
+        <div className="card config-error-card">
+          <h2 className="config-error-title">Deployment Configuration Error</h2>
+          <p className="config-error-desc">{API_CONFIG_ERROR}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
+      <RouteTitle />
+      <ServerWakingBanner />
       <Navbar />
 
       {serverError && (
@@ -22,7 +39,9 @@ function AppContent() {
       )}
 
       <main className="main-content">
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </main>
 
       <NotificationToast />

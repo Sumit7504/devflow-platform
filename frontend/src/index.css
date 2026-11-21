@@ -796,5 +796,94 @@ a:hover {
   color: var(--color-text);
 }
 
+/* ── Focus Outlines ──────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Waking Up Banner ────────────────────────────────────────────────────────── */
+.waking-banner {
+  background-color: #f0fdfa;
+  border-bottom: 1px solid #ccfbf1;
+  padding: 10px 16px;
+  width: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.waking-banner-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.waking-banner-text {
+  font-size: 0.875rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.waking-banner-btn {
+  padding: 4px 12px;
+  font-size: 0.8125rem;
+  height: 32px;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.waking-banner-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Error Boundary & Config Error Fallbacks ─────────────────────────────────── */
+.error-boundary-wrapper,
+.config-error-wrapper {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+}
+
+.error-boundary-card,
+.config-error-card {
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  padding: var(--space-xl);
+}
+
+.error-boundary-title,
+.config-error-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+
+.error-boundary-desc,
+.config-error-desc {
+  font-size: 0.875rem;
+  color: var(--color-text-gray);
+  line-height: 1.5;
+  margin-bottom: var(--space-lg);
+}
+
 
 

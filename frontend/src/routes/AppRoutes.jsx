@@ -31,6 +31,9 @@ import RecruiterInterviewList from "../pages/RecruiterInterviewList";
 import RecruiterInterviewDetail from "../pages/RecruiterInterviewDetail";
 
 import AdminDashboard from "../pages/AdminDashboard";
+import AdminUserList from "../pages/AdminUserList";
+import AdminUserDetail from "../pages/AdminUserDetail";
+import AdminJobList from "../pages/AdminJobList";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 export default function AppRoutes() {
@@ -222,12 +225,36 @@ export default function AppRoutes() {
         }
       />
 
-      {/* Admin Protected Route (Placeholder) */}
+      {/* Admin Protected Routes */}
       <Route
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminUserList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminUserDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/jobs"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminJobList />
           </ProtectedRoute>
         }
       />

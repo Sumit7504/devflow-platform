@@ -95,12 +95,27 @@ export default function Navbar() {
             )}
 
             {isAuthenticated && user?.role === "admin" && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-              >
-                Dashboard
-              </NavLink>
+              <>
+                <NavLink
+                  to="/admin"
+                  end
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Overview
+                </NavLink>
+                <NavLink
+                  to="/admin/users"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Users
+                </NavLink>
+                <NavLink
+                  to="/admin/jobs"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Jobs
+                </NavLink>
+              </>
             )}
 
             {!isAuthenticated && (

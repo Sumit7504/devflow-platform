@@ -531,6 +531,19 @@ a:hover {
   color: #b91c1c;
 }
 
+.status-active {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.status-deactivated,
+.status-inactive {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
 /* Slot Selection Fieldset */
 .slots-fieldset {
   border: none;

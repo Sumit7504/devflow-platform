@@ -578,6 +578,91 @@ Recruiter interview overview (`/recruiter/interviews/:id`):
 
 ---
 
+## Phase 5e — Admin Pages
+
+### Goal
+Provide platform oversight, analytics, and administrative governance for DevFlow administrators. Admins can inspect real-time platform metrics across users, jobs, applications, interviews, and assessments, search and filter user accounts, toggle user activation status, adjust user roles with administrative promotion warnings, and review, close, or delete job postings.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Admin-Only Routes & Protected Route Boundaries
+- **Client Route Protection**: Admin routes (`/admin`, `/admin/users`, `/admin/users/:id`, `/admin/jobs`) are guarded by `<ProtectedRoute allowedRoles={["admin"]}>`. Non-admin users are automatically redirected to `/unauthorized`.
+- **Authoritative Backend Security**: The client guard is strictly an interface convenience. The backend route file (`backend/routes/admin.js`) enforces `router.use(auth, authorizeRoles("admin"))`, rejecting any unauthorized requests with `403 Forbidden` regardless of client state.
+
+#### 2. Why the Frontend Never Decides Permissions (Server Authority)
+- **Zero Client-Side Admin Counting**: The frontend never counts or guesses how many active administrators exist across the database.
+- **Last Active Admin Guard**: When deactivating or demoting an admin, the backend queries `User.countDocuments({ role: "admin", isActive: { $ne: false } })`. If `activeAdminCount <= 1`, it rejects the request with `400 Bad Request` and returns `"Cannot deactivate the last remaining active admin"` or `"Cannot change role of the last remaining admin"`. The frontend renders this server message directly to the administrator.
+- **Own-Account Protection**: While the frontend disables actions on the administrator's own account as a visual safeguard, the server independently verifies `req.user._id.equals(targetUser._id)` and rejects self-deactivation or self-demotion with `400 Bad Request` (`"Cannot deactivate your own account"` or `"Cannot change your own role"`).
+
+#### 3. How Inline Confirmations Protect Destructive Operations
+- **Accessible & Non-Disruptive**: To avoid browser-native `window.confirm()` popups, destructive actions (deactivating users, promoting/demoting roles, closing jobs, deleting jobs) use inline confirmation prompts.
+- **Focus Management & Screen Readers**: Confirmations announce their text with `aria-live="polite"`, keep exactly one confirmation open at a time, and restore focus to the opening element when cancelled.
+- **Reversion on Cancel or Error**: When an administrator selects a new role in the role dropdown, the select element immediately presents a confirmation prompt. If the action is cancelled or encounters an error, the dropdown value automatically reverts to the current role and only updates to the new role after the server refetch succeeds.
+- **Row-Level Disabling**: While an asynchronous administrative request is in flight, all buttons on the corresponding row are disabled to prevent duplicate submissions or race conditions.
+
+#### 4. Dynamic Metric Cards & Zero-Count Integrity
+- The overview dashboard (`/admin`) derives its metric cards directly from the real keys returned by `GET /api/admin/stats` (`byStatus` and `byRole`) mapped through a central `LABEL_MAP`.
+- Zero counts are explicitly rendered for all statuses, ensuring administrators have accurate visibility into inactive or empty pipelines.
+- Metric cards link directly to filtered list views (e.g. clicking "Open: 5" navigates to `/admin/jobs?status=open`, clicking "Candidate: 6" navigates to `/admin/users?role=candidate`).
+
+---
+
+### Frontend Files Created
+
+#### `frontend/src/components/admin/UserActions.jsx`
+Shared user management action controls used by both the users list and user detail views:
+- Compares string user identifiers (`_id` vs `id`) to detect the admin's own account and disable self-mutations with an explanatory note.
+- Handles account deactivation and reactivation with inline confirmation.
+- Handles role modification dropdowns with promotion warnings and automatic value reversion on cancel or failure.
+- Displays exact server-side validation error messages (including last-admin guards).
+
+#### `frontend/src/pages/AdminUserList.jsx`
+Platform user directory table (`/admin/users`):
+- Features search by name or email (debounced ~400ms, trimmed, capped at 100 characters).
+- Provides role filter (`All Roles`, `Candidate`, `Recruiter`, `Admin`) and active status filter (`All Statuses`, `Active`, `Deactivated`) synchronized with URL search params.
+- Automatically resets to page 1 on search or filter adjustments.
+- Displays responsive data table with wrapped long email addresses.
+- Integrates shared `UserActions` component and maps backend pagination metadata (`currentPage`, `totalPages`) to the shared `Pagination` component.
+
+#### `frontend/src/pages/AdminUserDetail.jsx`
+Individual user management card (`/admin/users/:id`):
+- Displays user profile, role, status badge, registration date, and last update date.
+- Embeds the shared `UserActions` component to manage user activation and role permissions.
+
+#### `frontend/src/pages/AdminJobList.jsx`
+Platform job management table (`/admin/jobs`):
+- Features title search (debounced ~400ms, capped at 100 characters) and status filter (`All`, `Open`, `Closed`) synchronized with URL query params.
+- Provides **Close** action for open jobs with inline confirmation.
+- Provides **Delete** action with inline confirmation.
+- Handles `409 Conflict` gracefully when jobs have applications or assessment attempts, displaying the server's rejection reason and suggesting closure instead.
+- If deleting the last item on a page, automatically navigates to the previous page.
+
+---
+
+### Frontend Files Modified
+
+#### `frontend/src/pages/AdminDashboard.jsx`
+Replaced placeholder with live analytics overview:
+- Displays summary cards for Users (active/inactive and role breakdowns), Jobs (open/closed), Applications, Interviews, Assessment Attempts, and Registered Companies.
+- Builds metric rows dynamically from API status keys and links counts directly to pre-filtered lists.
+- Includes Retry capability on network or API failure.
+
+#### `frontend/src/components/common/StatusBadge.jsx`
+- Added status styling classes for `active` (green tint) and `deactivated` / `inactive` (red tint) using existing design tokens.
+
+#### `frontend/src/components/Navbar.jsx`
+- Updated administrator navigation menu to: `Overview` (`/admin`), `Users` (`/admin/users`), `Jobs` (`/admin/jobs`).
+
+#### `frontend/src/routes/AppRoutes.jsx`
+- Registered `/admin`, `/admin/users`, `/admin/users/:id`, and `/admin/jobs` wrapped inside `<ProtectedRoute allowedRoles={["admin"]}>`.
+
+#### `frontend/src/index.css`
+- Added design token styling classes for `.status-active`, `.status-deactivated`, and `.status-inactive`.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

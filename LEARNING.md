@@ -456,6 +456,128 @@ Added styling tokens for timer badges, MCQ option cards, monospace code response
 
 ---
 
+## Phase 5d-2 — Interview Pages (Candidate & Recruiter)
+
+### Goal
+Provide interview scheduling workflows for candidates and recruiters. Candidates can review proposed slots, select an eligible future slot and confirm it, or decline the interview. Recruiters can propose interviews with 1 to 5 slots across online, onsite, or phone modes for shortlisted candidates, monitor candidate responses across status tabs, inspect interview details with full status history audit timelines, and cancel active sessions.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Time Zones: UTC Storage vs. Local Rendering
+- **Absolute UTC Truth**: Recruiters and candidates may reside in different time zones. To avoid scheduling confusion, all slot timestamps are stored in MongoDB as ISO 8601 UTC dates (e.g. `2026-11-22T10:00:00.000Z`).
+- **Local Timezone Rendering**: Browser interfaces format UTC timestamps into the user's local time zone using JavaScript's native `Intl.DateTimeFormat`, displaying both the local time and the resolved time zone name (e.g. `10:00 AM – 10:45 AM (IST)`). On the recruiter proposal form, the user is reminded of their active local time zone before entering slots.
+- **Midnight Crossing**: If an interview slot starts on one calendar day and extends past midnight into the next (frequent with international interviews), the formatter explicitly outputs both calendar dates so neither party is misled about the date of attendance.
+
+#### 2. Dynamic Slot Lists & Form State Management
+- **Stable React Keys**: In `RecruiterInterviewPropose.jsx`, slots are managed dynamically (between 1 and 5 slots). Rather than using array indices as React keys, each row is assigned an immutable ID (`slot_...`). When rows are removed, state reconciliation remains stable without input shifting.
+- **Form Mode Reactivity**: Changing interview modes dynamically clears inapplicable values (`online` clears `location`, `onsite` clears `meetingLink`, and `phone` clears both).
+- **Unsaved Changes Shield**: An `onbeforeunload` listener warns recruiters if they attempt to navigate away while editing interview slots.
+
+#### 3. Why the Server, Not the Form, Decides Overlaps & Permissions
+- Client-side time checks (e.g. start in the future, duration between 15 and 240 minutes, end after start) serve merely as immediate visual hints for user convenience.
+- A slot may appear available when the recruiter drafts the proposal, but another candidate could confirm a conflicting slot at that exact moment.
+- The server performs authoritative overlap checks against all confirmed interviews for both the recruiter and candidate, validates application shortlisting, and enforces single active interview constraints via MongoDB partial unique indexes.
+- When the backend returns a 400 or 409 conflict, the client keeps form inputs intact, maps overlap errors directly to the offending slot row, and refetches the latest server state.
+
+#### 4. Efficient Batching for Recruitment Tables
+- In `JobApplicants.jsx`, fetching whether an active interview exists for each shortlisted candidate is accomplished with a single batched query per page: `GET /api/interviews/recruiter?job=:id&active=true&limit=50`.
+- This eliminates the N+1 request anti-pattern where every table row fires an independent network request.
+- If the active interview check fails, the UI gracefully suppresses the schedule button and displays a Retry action, preventing race conditions.
+
+---
+
+### Backend Enhancements
+
+#### `backend/controllers/interviewController.js`
+Updated `getRecruiterInterviews`:
+- Added optional `application` and `job` query filters with 400 validation for invalid ObjectId formats.
+- Added optional `active=true` filter querying statuses in `["proposed", "confirmed"]`.
+- Enforces strict scoping to `recruiter: req.user._id`, guaranteeing cross-recruiter isolation.
+
+#### `backend/test_phase3e.ps1`
+Added 6 new automated test assertions:
+- Tested filtering by `application` ID.
+- Tested filtering by `job` ID and `active=true`.
+- Tested rejection with 400 on malformed `application` and `job` IDs.
+- Tested cross-recruiter isolation (querying another recruiter's job/application returns 0 records).
+- Re-ran test runner $\to$ **All 53 tests passed (0 failures)**.
+
+---
+
+### Frontend Files Created
+
+#### `frontend/src/pages/CandidateInterviewList.jsx`
+Candidate interview dashboard (`/candidate/interviews`):
+- Displays all candidate interviews newest first matching `docs/desgin/Candidate Interviews.png`.
+- **Proposed Interviews**:
+  - Renders proposed slots within accessible `<fieldset>` and `<legend>` tags.
+  - Automatically identifies and disables expired slots with clear warning text `(This slot has already passed)`.
+  - Radio options allowing the candidate to select an eligible future slot, preserving the slot's original index in `proposedSlots`.
+  - If all proposed slots have passed, hides the Confirm button and displays an advisory notice while retaining the Decline button.
+  - Includes an accessible inline confirmation for declining an interview without `window.confirm`.
+- **Confirmed Interviews**:
+  - Displays selected slot in local time with time zone abbreviation.
+  - Formats verified meeting URLs (`http`/`https`) opening in new tabs (`target="_blank" rel="noopener noreferrer"`), onsite office locations, or phone instructions.
+- **Declined & Cancelled Interviews**:
+  - Displays status badges and recorded audit dates.
+
+#### `frontend/src/pages/RecruiterInterviewPropose.jsx`
+Interview proposal form (`/recruiter/applications/:applicationId/interview/new`):
+- Verifies that the candidate application is currently in `shortlisted` status.
+- Prevents proposing if an active interview already exists, providing a direct link to the existing session.
+- Mode selector (`online`, `onsite`, `phone`) that resets incompatible fields on change.
+- Meeting link validation using `new URL()` requiring `http` or `https`.
+- Notes field with live 1000-character counter.
+- Dynamic slot list (1 to 5 slots) with start and end `datetime-local` inputs.
+- Displays reminder of the user's active local time zone.
+- Converts inputs to ISO 8601 UTC before submission and sends only clean attributes (never sending `candidate`, `job`, `recruiter`, or `status`).
+- Maps 422 field errors and 409 slot overlap messages directly next to the matching slot row.
+
+#### `frontend/src/pages/RecruiterInterviewList.jsx`
+Recruiter interview management table (`/recruiter/interviews`):
+- Status tabs (`All`, `Proposed`, `Confirmed`, `Declined`, `Cancelled`) synchronized with URL query params (`?status=`), resetting to page 1 on tab changes.
+- Table displaying Candidate name & email, Job title, Mode, Status badge, and Confirmed slot (or "Waiting for candidate" / "—").
+- Accessible pagination controls.
+
+#### `frontend/src/pages/RecruiterInterviewDetail.jsx`
+Recruiter interview overview (`/recruiter/interviews/:id`):
+- Displays candidate info, job title, mode details, recruiter notes, proposed slots list, and confirmed slot.
+- Full chronological status history audit timeline (rendering entries cleanly without user names if `changedBy` is unpopulated).
+- "Cancel interview" action with accessible inline confirmation for active sessions (`proposed` or `confirmed`), triggering `PATCH /api/interviews/:id/cancel` and refetching fresh details.
+
+---
+
+### Frontend Files Modified
+
+#### `frontend/src/utils/formatters.js`
+- Added `getUserTimeZone()` returning the resolved local time zone identifier.
+- Added `formatSlotRange(start, end)` formatting slots in local time with time zone abbreviations and handling midnight crossings.
+- Added `isSlotInPast(start)` checking if a slot timestamp has passed.
+
+#### `frontend/src/components/common/StatusBadge.jsx`
+- Added styling classes for `proposed`, `confirmed`, `declined`, and `cancelled` using only existing CSS design tokens.
+
+#### `frontend/src/components/Navbar.jsx`
+- Added `Interviews` navigation links for candidates (`/candidate/interviews`) and recruiters (`/recruiter/interviews`).
+
+#### `frontend/src/pages/JobApplicants.jsx`
+- Batched active interview lookup per page (`GET /api/interviews/recruiter?job=:id&active=true&limit=50`).
+- Added conditional "Schedule interview" or "View interview" button for shortlisted candidates, and a Retry button if the lookup fails.
+
+#### `frontend/src/pages/RecruiterApplicationDetail.jsx`
+- Added conditional "Schedule interview" or "View interview" link under Application actions for shortlisted applicants, with a Retry button if the interview check fails.
+- Guarded status history rendering to handle unpopulated `changedBy` fields safely.
+
+#### `frontend/src/routes/AppRoutes.jsx`
+- Registered `/candidate/interviews`, `/recruiter/applications/:applicationId/interview/new`, `/recruiter/interviews`, and `/recruiter/interviews/:id` wrapped in their respective `ProtectedRoute` wrappers.
+
+#### `frontend/src/index.css`
+- Added design token classes for slot option cards, fieldset/legend styling, and interview status badges.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

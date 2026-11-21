@@ -310,6 +310,42 @@ Run-Test "7d" "Recruiter A GET /interviews/recruiter?page=-1&limit=abc safe fall
     param($res) $res.Json.page -eq 1
 } | Out-Null
 
+# 7e: Filter by application
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?application=${appC1Id}" -token $tokenA
+Run-Test "7e" "Recruiter A GET /interviews/recruiter?application=... works" $r 200 {
+    param($res)
+    $list = $res.Json.interviews
+    $list.Count -ge 1 -and $list[0].application -eq $appC1Id
+} | Out-Null
+
+# 7f: Filter by job and active=true
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?job=${jobA1Id}&active=true" -token $tokenA
+Run-Test "7f" "Recruiter A GET /interviews/recruiter?job=...&active=true works" $r 200 {
+    param($res)
+    $list = $res.Json.interviews
+    $list.Count -ge 1 -and ($list[0].status -eq "proposed" -or $list[0].status -eq "confirmed")
+} | Out-Null
+
+# 7g: Invalid application ID -> 400
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?application=not-a-valid-id" -token $tokenA
+Run-Test "7g" "GET /interviews/recruiter?application=not-a-valid-id -> 400" $r 400 | Out-Null
+
+# 7h: Invalid job ID -> 400
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?job=not-a-valid-id" -token $tokenA
+Run-Test "7h" "GET /interviews/recruiter?job=not-a-valid-id -> 400" $r 400 | Out-Null
+
+# 7i: Cross-recruiter isolation by job (Recruiter B queries A's job) -> total 0
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?job=${jobA1Id}&active=true" -token $tokenB
+Run-Test "7i" "Recruiter B queries A's job -> 0 interviews (cross-recruiter isolation)" $r 200 {
+    param($res) $res.Json.total -eq 0 -and $res.Json.interviews.Count -eq 0
+} | Out-Null
+
+# 7j: Cross-recruiter isolation by application (Recruiter B queries A's application) -> total 0
+$r = Invoke-Api GET "${BASE}/interviews/recruiter?application=${appC1Id}" -token $tokenB
+Run-Test "7j" "Recruiter B queries A's application -> 0 interviews (cross-recruiter isolation)" $r 200 {
+    param($res) $res.Json.total -eq 0 -and $res.Json.interviews.Count -eq 0
+} | Out-Null
+
 # ── TEST 8: GET /api/interviews/:id access & privacy ──────────────────────────
 # 8a: C1 GET :id -> 200, no passwords
 $r = Invoke-Api GET "${BASE}/interviews/${interviewC1Id}" -token $tokenC1

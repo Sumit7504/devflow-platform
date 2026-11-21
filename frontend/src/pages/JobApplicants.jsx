@@ -39,11 +39,41 @@ export default function JobApplicants() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Active interviews map: { [applicationId]: interviewId }
+  const [activeInterviewsMap, setActiveInterviewsMap] = useState({});
+  const [interviewLookupError, setInterviewLookupError] = useState(false);
+
+  const fetchActiveInterviews = (signal) => {
+    setInterviewLookupError(false);
+    client
+      .get(`/interviews/recruiter?job=${id}&active=true&limit=50`, { signal })
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.interviews)) {
+          const map = {};
+          res.data.interviews.forEach((inv) => {
+            const appId = (inv.application?._id || inv.application)?.toString();
+            if (appId) {
+              map[appId] = inv._id;
+            }
+          });
+          setActiveInterviewsMap(map);
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "CanceledError" && err.code !== "ERR_CANCELED") {
+          setInterviewLookupError(true);
+        }
+      });
+  };
+
   const fetchData = () => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
     setUnauthorized(false);
+
+    // Fetch active interviews for the job in ONE request per page
+    fetchActiveInterviews(controller.signal);
 
     Promise.all([
       client.get(`/jobs/${id}`, { signal: controller.signal }),
@@ -223,12 +253,40 @@ export default function JobApplicants() {
                         </td>
 
                         <td style={{ textAlign: "right" }}>
-                          <Link
-                            to={`/recruiter/applications/${app._id}`}
-                            className="btn btn-outline btn-sm"
-                          >
-                            View application
-                          </Link>
+                          <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+                            {app.status === "shortlisted" && (
+                              interviewLookupError ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  style={{ color: "var(--color-error)", borderColor: "var(--color-border)" }}
+                                  onClick={() => fetchActiveInterviews()}
+                                >
+                                  Retry
+                                </button>
+                              ) : activeInterviewsMap[app._id] ? (
+                                <Link
+                                  to={`/recruiter/interviews/${activeInterviewsMap[app._id]}`}
+                                  className="btn btn-outline btn-sm"
+                                >
+                                  View interview
+                                </Link>
+                              ) : (
+                                <Link
+                                  to={`/recruiter/applications/${app._id}/interview/new`}
+                                  className="btn btn-outline btn-sm"
+                                >
+                                  Schedule interview
+                                </Link>
+                              )
+                            )}
+                            <Link
+                              to={`/recruiter/applications/${app._id}`}
+                              className="btn btn-outline btn-sm"
+                            >
+                              View application
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}

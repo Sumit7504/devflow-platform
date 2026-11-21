@@ -76,3 +76,71 @@ export function getErrorMessage(err, fallback = "An unexpected error occurred.")
   }
   return err.response.data?.message || fallback;
 }
+
+/**
+ * Returns the user's resolved local time zone identifier (e.g. "Asia/Kolkata", "America/New_York").
+ */
+export function getUserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Format an interview slot start and end in user's local timezone.
+ * Shows both dates when crossing midnight.
+ * Example (same day): "15 Dec 2026, 10:00 AM – 10:45 AM (IST)"
+ * Example (midnight cross): "15 Dec 2026, 11:30 PM – 16 Dec 2026, 12:30 AM (IST)"
+ */
+export function formatSlotRange(startStr, endStr) {
+  if (!startStr || !endStr) return "";
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return "";
+
+  const timeZone = getUserTimeZone();
+
+  const dateFormatter = new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  });
+
+  const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone,
+  });
+
+  const tzFormatter = new Intl.DateTimeFormat(undefined, {
+    timeZoneName: "short",
+    timeZone,
+  });
+
+  const tzParts = tzFormatter.formatToParts(start);
+  const tzName = tzParts.find((p) => p.type === "timeZoneName")?.value || timeZone;
+
+  const startDateStr = dateFormatter.format(start);
+  const endDateStr = dateFormatter.format(end);
+  const startTimeStr = timeFormatter.format(start);
+  const endTimeStr = timeFormatter.format(end);
+
+  if (startDateStr === endDateStr) {
+    return `${startDateStr}, ${startTimeStr} – ${endTimeStr} (${tzName})`;
+  }
+  return `${startDateStr}, ${startTimeStr} – ${endDateStr}, ${endTimeStr} (${tzName})`;
+}
+
+/**
+ * Check if a slot start timestamp is in the past.
+ */
+export function isSlotInPast(startStr) {
+  if (!startStr) return false;
+  const start = new Date(startStr);
+  if (isNaN(start.getTime())) return false;
+  return start.getTime() <= Date.now();
+}

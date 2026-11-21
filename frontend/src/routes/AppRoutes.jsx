@@ -15,6 +15,7 @@ import ApplicationDetail from "../pages/ApplicationDetail";
 import CandidateAssessmentIntro from "../pages/CandidateAssessmentIntro";
 import CandidateAttemptView from "../pages/CandidateAttemptView";
 import CandidateAttemptList from "../pages/CandidateAttemptList";
+import CandidateInterviewList from "../pages/CandidateInterviewList";
 
 import RecruiterDashboard from "../pages/RecruiterDashboard";
 import CompanyProfile from "../pages/CompanyProfile";
@@ -25,6 +26,9 @@ import RecruiterApplicationDetail from "../pages/RecruiterApplicationDetail";
 import RecruiterAssessmentManage from "../pages/RecruiterAssessmentManage";
 import RecruiterAssessmentAttempts from "../pages/RecruiterAssessmentAttempts";
 import RecruiterAttemptDetail from "../pages/RecruiterAttemptDetail";
+import RecruiterInterviewPropose from "../pages/RecruiterInterviewPropose";
+import RecruiterInterviewList from "../pages/RecruiterInterviewList";
+import RecruiterInterviewDetail from "../pages/RecruiterInterviewDetail";
 
 import AdminDashboard from "../pages/AdminDashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -100,6 +104,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["candidate"]}>
             <CandidateAttemptView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/interviews"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <CandidateInterviewList />
           </ProtectedRoute>
         }
       />
@@ -182,6 +194,30 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["recruiter"]}>
             <RecruiterAttemptDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/applications/:applicationId/interview/new"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterInterviewPropose />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/interviews"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterInterviewList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recruiter/interviews/:id"
+        element={
+          <ProtectedRoute allowedRoles={["recruiter"]}>
+            <RecruiterInterviewDetail />
           </ProtectedRoute>
         }
       />

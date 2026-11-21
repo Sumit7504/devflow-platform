@@ -48,6 +48,12 @@ export default function Navbar() {
                 >
                   Assessments
                 </NavLink>
+                <NavLink
+                  to="/candidate/interviews"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Interviews
+                </NavLink>
               </>
             )}
 
@@ -72,6 +78,12 @@ export default function Navbar() {
                   className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
                 >
                   Jobs
+                </NavLink>
+                <NavLink
+                  to="/recruiter/interviews"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Interviews
                 </NavLink>
                 <NavLink
                   to="/recruiter/jobs/new"

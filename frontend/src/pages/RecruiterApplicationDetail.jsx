@@ -24,11 +24,33 @@ export default function RecruiterApplicationDetail() {
   const [confirmStatus, setConfirmStatus] = useState(null);
   const confirmOpenerRef = useRef(null);
 
+  // Active interview state
+  const [activeInterview, setActiveInterview] = useState(null);
+  const [interviewLookupError, setInterviewLookupError] = useState(false);
+
+  const fetchActiveInterview = (signal) => {
+    setInterviewLookupError(false);
+    client
+      .get(`/interviews/recruiter?application=${id}&active=true`, { signal })
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.interviews)) {
+          setActiveInterview(res.data.interviews[0] || null);
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "CanceledError" && err.code !== "ERR_CANCELED") {
+          setInterviewLookupError(true);
+        }
+      });
+  };
+
   const fetchApplication = () => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
     setUnauthorized(false);
+
+    fetchActiveInterview(controller.signal);
 
     client
       .get(`/applications/${id}`, { signal: controller.signal })
@@ -221,6 +243,34 @@ export default function RecruiterApplicationDetail() {
                 </button>
               )}
 
+              {/* Schedule / View Interview action (available when shortlisted) */}
+              {currentStatus === "shortlisted" && !confirmStatus && (
+                interviewLookupError ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ color: "var(--color-error)", borderColor: "var(--color-border)" }}
+                    onClick={() => fetchActiveInterview()}
+                  >
+                    Retry interview check
+                  </button>
+                ) : activeInterview ? (
+                  <Link
+                    to={`/recruiter/interviews/${activeInterview._id}`}
+                    className="btn btn-outline"
+                  >
+                    View interview ({activeInterview.status})
+                  </Link>
+                ) : (
+                  <Link
+                    to={`/recruiter/applications/${id}/interview/new`}
+                    className="btn btn-outline"
+                  >
+                    Schedule interview
+                  </Link>
+                )
+              )}
+
               {/* Reject action (requires inline confirmation) */}
               {currentStatus !== "rejected" && !confirmStatus && (
                 <button
@@ -345,9 +395,9 @@ export default function RecruiterApplicationDetail() {
                     <div className="timeline-time">
                       {formatDate(item.changedAt)}
                     </div>
-                    {item.changedBy && (
+                    {item.changedBy && (typeof item.changedBy === "object" ? item.changedBy.name : null) && (
                       <div style={{ fontSize: "0.75rem", color: "var(--color-text-gray)", marginTop: "2px" }}>
-                        Changed by {item.changedBy.name || "User"} ({item.changedBy.role || "recruiter"})
+                        Changed by {item.changedBy.name} ({item.changedBy.role || "recruiter"})
                       </div>
                     )}
                   </div>

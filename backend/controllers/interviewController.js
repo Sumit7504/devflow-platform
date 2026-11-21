@@ -223,9 +223,28 @@ const getRecruiterInterviews = async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req.query);
 
     const filter = { recruiter: req.user._id };
-    const VALID_STATUSES = ["proposed", "confirmed", "declined", "cancelled"];
-    if (req.query.status && VALID_STATUSES.includes(req.query.status)) {
-      filter.status = req.query.status;
+
+    if (req.query.application) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.application)) {
+        return res.status(400).json({ success: false, message: "Invalid application ID" });
+      }
+      filter.application = req.query.application;
+    }
+
+    if (req.query.job) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.job)) {
+        return res.status(400).json({ success: false, message: "Invalid job ID" });
+      }
+      filter.job = req.query.job;
+    }
+
+    if (req.query.active === "true") {
+      filter.status = { $in: ["proposed", "confirmed"] };
+    } else {
+      const VALID_STATUSES = ["proposed", "confirmed", "declined", "cancelled"];
+      if (req.query.status && VALID_STATUSES.includes(req.query.status)) {
+        filter.status = req.query.status;
+      }
     }
 
     const [interviews, total] = await Promise.all([

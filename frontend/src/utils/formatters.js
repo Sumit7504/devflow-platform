@@ -144,3 +144,46 @@ export function isSlotInPast(startStr) {
   if (isNaN(start.getTime())) return false;
   return start.getTime() <= Date.now();
 }
+
+/**
+ * Validates whether an ID string is a 24-character hexadecimal ObjectId.
+ */
+export function isValidObjectId(id) {
+  return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
+}
+
+/**
+ * Formats a date timestamp into user-friendly relative time (e.g. "just now", "5 minutes ago", "2 hours ago").
+ * Clamps future dates or differences < 60 seconds to "just now" (Requirement 11).
+ */
+export function formatRelativeTime(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+
+  // Clamp future times or within 60 seconds to "just now"
+  if (diffMs < 60000) {
+    return "just now";
+  }
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+  if (diffMinutes < 60) {
+    return rtf.format(-diffMinutes, "minute");
+  }
+  if (diffHours < 24) {
+    return rtf.format(-diffHours, "hour");
+  }
+  if (diffDays < 30) {
+    return rtf.format(-diffDays, "day");
+  }
+  return formatDate(dateString);
+}

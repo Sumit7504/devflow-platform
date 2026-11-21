@@ -34,6 +34,7 @@ import AdminDashboard from "../pages/AdminDashboard";
 import AdminUserList from "../pages/AdminUserList";
 import AdminUserDetail from "../pages/AdminUserDetail";
 import AdminJobList from "../pages/AdminJobList";
+import NotificationList from "../pages/NotificationList";
 import ProtectedRoute from "../components/ProtectedRoute";
 
 export default function AppRoutes() {
@@ -221,6 +222,16 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["recruiter"]}>
             <RecruiterInterviewDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Notifications (Candidate & Recruiter) */}
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute allowedRoles={["candidate", "recruiter"]}>
+            <NotificationList />
           </ProtectedRoute>
         }
       />

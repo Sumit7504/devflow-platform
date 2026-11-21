@@ -1,8 +1,10 @@
 import React from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import Navbar from "./components/Navbar";
 import AppRoutes from "./routes/AppRoutes";
+import NotificationToast from "./components/notifications/NotificationToast";
 
 function AppContent() {
   const { serverError } = useAuth();
@@ -22,6 +24,8 @@ function AppContent() {
       <main className="main-content">
         <AppRoutes />
       </main>
+
+      <NotificationToast />
     </div>
   );
 }
@@ -30,7 +34,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <NotificationProvider>
+          <AppContent />
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -663,6 +663,118 @@ Replaced placeholder with live analytics overview:
 
 ---
 
+## Phase 5f — Live Notifications in the UI
+
+### Goal
+Provide real-time, accessible notification delivery in the frontend for candidates and recruiters via Socket.IO WebSockets and REST fallback. Features include an interactive notification bell in the navigation bar with an unread badge (`9+` when exceeding 9), a quick-preview dropdown with relative timestamps, auto-dismissing toast popups for incoming events with pause-on-hover/focus, a dedicated `/notifications` management page with unread filters and pagination, and zero-leak socket connection lifecycle management.
+
+---
+
+### Concepts & Architecture
+
+#### 1. WebSocket Lifecycle & StrictMode in React
+In React 18+ development mode, components mount, unmount, and re-mount immediately to help detect side-effect bugs. If WebSocket listeners or connections are not cleaned up properly, each mount creates duplicate socket connections and duplicate event listeners, resulting in memory leaks, duplicated toasts, and inflated network traffic.
+- **Dynamic Token Evaluation**: Socket.IO is initialized with `auth: (cb) => cb({ token })`. Instead of embedding tokens into static configuration or query strings, this dynamic callback evaluates the current JWT on every single connection and reconnection attempt.
+- **Strict Cleanup**: In `NotificationContext`, the effect cleanup function removes all registered socket listeners (`removeAllListeners()`) and disconnects the underlying socket connection (`disconnectSocket()`) when the user logs out or the component unmounts.
+- **Singleton Socket Factory**: `src/socket/index.js` encapsulates a singleton instance, preventing accidental multiple concurrent connections for the same tab.
+
+#### 2. Distinguishing Connection Failures (`socket.active`)
+Socket.IO v4 distinguishes between transport/network drops and rejected handshakes:
+- **Temporary Network Outages (`socket.active === true`)**: When the server restarts or network connectivity drops, Socket.IO continues automatic reconnection attempts with exponential backoff. The context updates status to `"reconnecting"` without clearing state, showing a non-intrusive status indicator in the UI.
+- **Rejected Handshake (`socket.active === false`)**: When the server rejects the connection in its `io.use` authentication middleware (due to an expired token, invalid signature, or deactivated user), Socket.IO sets `socket.active` to `false` and halts retries. In this scenario, `NotificationContext` performs a single `GET /api/auth/me` request to verify whether credentials are stale or the user has been deactivated, ensuring graceful session management without looping.
+
+#### 3. Database as Source of Truth & Reconnection Reconciliation
+While incoming `notification:new` events update the UI immediately for real-time responsiveness:
+- **Deduplication**: Incoming events are checked against existing state; the `unreadCount` increments only if the notification `_id` is not already present in memory.
+- **Server Reconciliation**: On reconnection (`connect` event following a prior connection) and on window tab focus (`visibilitychange`), `NotificationContext` fetches `GET /api/notifications/unread-count` and `GET /api/notifications?limit=5` to reconcile local count and lists with the database, ensuring notifications sent during offline intervals are never missed.
+- **List Version Synchronization**: A `version` counter is updated on each live notification or mutation so that the `/notifications` page (when on page 1) automatically updates to display fresh items.
+
+#### 4. Role-Scoped Routing & ID Validation
+Notifications contain embedded IDs in their `data` payload (`applicationId`, `attemptId`, `interviewId`):
+- All entity IDs are validated against standard 24-character hexadecimal format (`isValidObjectId`) before navigation is permitted.
+- Toast and dropdown clicks route users strictly according to their role (candidates are routed to `/candidate/*` paths and recruiters to `/recruiter/*` paths).
+- Administrators do not connect to the notification socket or render the notification bell.
+
+#### 5. Accessibility & Design Tokens
+- Toasts render inside a single `role="status"` live region, announcing updates cleanly without double announcements.
+- The toast auto-dismisses after 5 seconds but pauses its countdown on mouse hover and keyboard focus (`onMouseEnter`, `onFocus`), and includes a dedicated dismiss button.
+- The bell icon utilizes standard SVG, `aria-expanded`, and `aria-controls`, and unread indicators include visually hidden `.sr-only` text for screen readers.
+- All styles adhere strictly to design tokens: `#0F766E` teal accent, `#F8FAFC` background, white cards, `#E5E7EB` borders, `#111827` text, `#5B6472` gray text, and `#B91C1C` error red. No emoji, gradients, or extra colors.
+
+#### 6. Production Security & CORS Note (Phase 6)
+- In development, Socket.IO accepts incoming connections from local origins.
+- **Phase 6 Production Requirement**: In production deployment, CORS for both Express and Socket.IO MUST be strictly locked down to the deployed frontend domain:
+  ```javascript
+  const io = new Server(server, {
+    cors: {
+      origin: process.env.CLIENT_URL,
+      methods: ["GET", "POST"],
+      credentials: true
+    }
+  });
+  ```
+
+---
+
+### Files Created
+
+#### `frontend/src/socket/index.js`
+Singleton Socket.IO client factory with dynamic JWT auth callback, automatic environment URL resolution (`VITE_SOCKET_URL` falling back to `VITE_API_URL` with `/api` stripped), and connection teardown helper.
+
+#### `frontend/src/context/NotificationContext.jsx`
+Global notification context managing:
+- Real-time WebSocket connection state (`connected`, `reconnecting`, `disconnected`).
+- Deduplicated live notification reception, unread counter management, and reconnection reconciliation.
+- REST mutation operations: `markAsRead(id)`, `markAllAsRead()`, `deleteNotification(id)`.
+- Live toast trigger state and page version counter.
+- Window visibility listener (`visibilitychange`) for automatic background tab re-synchronization.
+
+#### `frontend/src/components/notifications/NotificationToast.jsx`
+Accessible popup toast rendered at the bottom-right of the screen for incoming real-time notifications:
+- Employs `role="status"` for non-disruptive screen reader announcement.
+- 5-second auto-dismiss with hover/focus pause.
+- Role-scoped secure link navigation with 24-hex ObjectId validation.
+- Clean dismiss action.
+
+#### `frontend/src/components/notifications/NotificationDropdown.jsx`
+Interactive dropdown panel anchored to the navigation bell:
+- Accessible disclosure (`aria-expanded`, `aria-controls`, `role="dialog"`).
+- Keyboard support: closes on Escape and returns focus to the bell button.
+- Outside-click listener to automatically close when clicking away.
+- Shared 60-second timer updating relative timestamps (`just now`, `5m ago`, `2h ago`).
+- Shows latest 5 notifications with unread indicator dots and quick link to `/notifications`.
+
+#### `frontend/src/pages/NotificationList.jsx`
+Full-featured notification management page at `/notifications`:
+- Filter toggle between all notifications and unread-only (`unread=true`).
+- Pagination support with Previous/Next controls.
+- Automatic page 1 synchronization via context `version` counter.
+- Actions: Mark all as read, mark individual as read, and delete notification with feedback.
+
+---
+
+### Files Modified
+
+#### `frontend/.env.example` & `frontend/.env`
+Added `VITE_SOCKET_URL=http://localhost:5000`.
+
+#### `frontend/src/utils/formatters.js`
+Added `isValidObjectId(id)` for 24-hex validation and `formatRelativeTime(dateString)` for localized relative time formatting using `Intl.RelativeTimeFormat`.
+
+#### `frontend/src/App.jsx`
+Wrapped application content within `<NotificationProvider>` and rendered `<NotificationToast />`.
+
+#### `frontend/src/components/Navbar.jsx`
+Added accessible inline SVG bell button with unread count badge (`9+` when exceeding 9) for `candidate` and `recruiter` roles, rendering `NotificationDropdown`.
+
+#### `frontend/src/routes/AppRoutes.jsx`
+Registered `/notifications` route for `candidate` and `recruiter` roles under `ProtectedRoute`.
+
+#### `frontend/src/index.css`
+Added CSS classes for notification bell, badge, dropdown container, unread dot, toast notifications, and list layout conforming to design tokens.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

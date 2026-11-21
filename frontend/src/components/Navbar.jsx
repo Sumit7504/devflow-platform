@@ -11,35 +11,44 @@ export default function Navbar() {
     navigate("/login");
   };
 
-  const getDashboardPath = (role) => {
-    if (role === "recruiter") return "/recruiter";
-    if (role === "admin") return "/admin";
-    return "/candidate";
-  };
-
   return (
     <nav className="navbar">
       <div className="navbar-inner">
         <div className="nav-left">
-          <Link to="/" className="nav-brand">
+          <Link to={user?.role === "candidate" ? "/candidate" : "/"} className="nav-brand">
             DevFlow
           </Link>
 
           <div className="nav-links">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-            >
-              Home
-            </NavLink>
-
-            {isAuthenticated && user && (
+            {isAuthenticated && user?.role === "candidate" ? (
+              <>
+                <NavLink
+                  to="/candidate/jobs"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Jobs
+                </NavLink>
+                <NavLink
+                  to="/candidate/applications"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  My applications
+                </NavLink>
+              </>
+            ) : isAuthenticated && user ? (
               <NavLink
-                to={getDashboardPath(user.role)}
+                to={user.role === "recruiter" ? "/recruiter" : "/admin"}
                 className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
               >
                 Dashboard
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+              >
+                Home
               </NavLink>
             )}
           </div>
@@ -49,7 +58,6 @@ export default function Navbar() {
           {isAuthenticated && user ? (
             <>
               <span className="nav-user">{user.name}</span>
-              <span className="badge-tag">{user.role}</span>
               <button onClick={handleLogout} className="btn btn-outline">
                 Log out
               </button>

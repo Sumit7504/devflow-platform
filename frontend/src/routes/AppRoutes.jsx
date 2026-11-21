@@ -6,7 +6,13 @@ import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Unauthorized from "../pages/Unauthorized";
 import NotFound from "../pages/NotFound";
+
 import CandidateDashboard from "../pages/CandidateDashboard";
+import JobList from "../pages/JobList";
+import JobDetail from "../pages/JobDetail";
+import ApplicationList from "../pages/ApplicationList";
+import ApplicationDetail from "../pages/ApplicationDetail";
+
 import RecruiterDashboard from "../pages/RecruiterDashboard";
 import AdminDashboard from "../pages/AdminDashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
@@ -20,7 +26,7 @@ export default function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
-      {/* Role-Protected Dashboard Routes */}
+      {/* Candidate Protected Routes */}
       <Route
         path="/candidate"
         element={
@@ -30,6 +36,40 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/candidate/jobs"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <JobList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/jobs/:id"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <JobDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/applications"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <ApplicationList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/candidate/applications/:id"
+        element={
+          <ProtectedRoute allowedRoles={["candidate"]}>
+            <ApplicationDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Recruiter Protected Route (Placeholder) */}
+      <Route
         path="/recruiter"
         element={
           <ProtectedRoute allowedRoles={["recruiter"]}>
@@ -37,6 +77,8 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Admin Protected Route (Placeholder) */}
       <Route
         path="/admin"
         element={

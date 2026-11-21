@@ -118,6 +118,117 @@ Added production security notice specifying that CORS must be restricted to `CLI
 
 ---
 
+## Phase 5b — Candidate Pages, Job Board & Application Flow
+
+### Goal
+Implement the candidate-facing portal: a live job board with debounced search, location and job-type filters, pagination synchronized with URL query parameters, full job detail views with company info, requirement lists, skill tags, an apply submission flow, a dashboard summary of recent applications, and an application detail screen with a chronological status history audit timeline.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Data Fetching in `useEffect`
+In React functional components, `useEffect` triggers side-effects (such as HTTP requests) in response to component mounting or dependency changes.
+- Placing API calls inside `useEffect` ensures that rendering remains pure and predictable.
+- Whenever a dependency (such as pagination `page`, filter `jobType`, or route param `:id`) changes, `useEffect` executes the fetch logic, setting loading and error states appropriately to reflect request lifecycles.
+
+#### 2. Query-String State (`useSearchParams`)
+Storing filter parameters (such as `keyword`, `location`, `jobType`, `page`) in the browser's URL query string rather than in ephemeral component memory provides multiple benefits:
+- **Shareability & Bookmarking**: Candidates can share or bookmark the exact filtered job search URL.
+- **Browser History Integration**: Browser back and forward buttons work seamlessly without resetting filter selections or page numbers.
+- **Single Source of Truth**: The component derives its query parameters directly from `searchParams`, resetting `page` to 1 whenever any filter changes.
+
+#### 3. Debouncing Input State (`useDebounce`)
+When typing into a search box, firing a network request on every single keystroke causes excessive server load and jittery UI updates.
+- Local state (`typedKeyword`) updates immediately with every keystroke so input typing feels instant and responsive.
+- A custom hook `useDebounce(typedKeyword, 400)` delays writing the query value until the user pauses typing for 400ms.
+- Once debounced, the updated keyword is written to `searchParams`, triggering a single consolidated API request.
+
+#### 4. Stale-Response Handling & `AbortController`
+In asynchronous web apps, network requests can finish out of order. For instance, if a user types quickly or navigates between jobs, request A might return *after* request B, overwriting fresh data with stale results (a race condition).
+- Standard web `AbortController` instances are passed directly to `axios` via `{ signal: controller.signal }`.
+- When the component unmounts or before a new request begins, `useEffect`'s cleanup function calls `controller.abort()`.
+- Aborted errors (`CanceledError` / `ERR_CANCELED`) are explicitly ignored so they never show spurious error notifications to the user.
+
+#### 5. Safe Rendering & Data Sanitization
+- All user-supplied text (such as job descriptions, cover letters, and notes) is rendered as standard React text nodes (`{text}`), ensuring automatic HTML entity escaping and preventing Cross-Site Scripting (XSS).
+- External URLs (such as resumes and company logos) are validated strictly with `new URL()` to verify that the protocol is either `http:` or `https:`, and resume links open safely with `target="_blank" rel="noopener noreferrer"`.
+- Salaries are formatted as plain numbers with `Intl.NumberFormat` without hardcoded currency symbols, deadlines are formatted with `timeZone: "UTC"`, and network disconnects display clear connectivity guidance.
+
+---
+
+### Files Created
+
+#### `frontend/src/utils/formatters.js`
+Reusable formatting and validation utilities:
+- `formatDate(dateString)`: Formats dates into localized strings (`15 Dec 2026`).
+- `formatDeadline(dateString)`: Formats application deadlines with `timeZone: "UTC"`.
+- `formatSalary(min, max)`: Formats salary ranges as plain numbers via `Intl.NumberFormat` without currency symbols, returning empty string if omitted.
+- `isValidHttpUrl(urlString)`: Validates URLs using `new URL()` ensuring strictly `http:` or `https:` protocol.
+- `getErrorMessage(err, fallback)`: Distinguishes between offline network errors and backend API error messages while filtering out aborted requests.
+
+#### `frontend/src/hooks/useDebounce.js`
+A lightweight custom hook that delays updating a debounced value until after a specified delay (default 400ms), preventing high-frequency API calls during active typing.
+
+#### `frontend/src/components/common/Loader.jsx`
+Accessible loading component featuring the accent-colored CSS spinner and customizable status text.
+
+#### `frontend/src/components/common/ErrorMessage.jsx`
+Alert banner displaying structured error feedback with a retry action button.
+
+#### `frontend/src/components/common/EmptyState.jsx`
+Clean empty card component presenting contextual guidance and call-to-action buttons when query results or application lists are empty.
+
+#### `frontend/src/components/common/StatusBadge.jsx`
+Standardized pill badge displaying application status (`applied`, `shortlisted`, `rejected`, `hired`) and job status (`open`, `closed`).
+
+#### `frontend/src/components/common/Pagination.jsx`
+Pagination component providing Previous/Next navigation controls with a `Page X of Y` indicator conforming to the platform design specification.
+
+#### `frontend/src/pages/JobList.jsx`
+The primary job discovery page (`/candidate/jobs`):
+- Connects to `GET /api/jobs`.
+- Features a debounced search input, location filter, and job type dropdown synchronized with `useSearchParams`.
+- Displays individual job cards with title, company, location, employment type, salary range, deadline, and a "View job" navigation button.
+- Manages pagination controls with automatic reset to page 1 upon filter changes.
+
+#### `frontend/src/pages/JobDetail.jsx`
+Comprehensive job detail and application page (`/candidate/jobs/:id`):
+- Connects to `GET /api/jobs/:id` and `GET /api/applications/my`.
+- Renders a two-column responsive layout: left column contains the role description, requirement bullets, and skill tags; right column manages the application flow.
+- Dynamically checks if the candidate has already applied to the job and replaces the form with an already-applied notice linking to the existing application.
+- Disables the form with contextual notices if the job is closed or the deadline has passed.
+- Submits `{ jobId, coverLetter, resumeUrl }` to `POST /api/applications`, handles 422 inline errors, 409 conflict errors, and redirects to the newly created application ID.
+
+#### `frontend/src/pages/ApplicationList.jsx`
+Candidate applications list (`/candidate/applications`):
+- Connects to `GET /api/applications/my`.
+- Displays cards for all submitted applications with job title, company name, applied timestamp, and current status badge.
+
+#### `frontend/src/pages/ApplicationDetail.jsx`
+Detailed application review page (`/candidate/applications/:id`):
+- Connects to `GET /api/applications/:id`.
+- Displays candidate submission details (cover letter, secure external resume link).
+- Features a chronological status history audit timeline showing transitions from initial application to final hiring status with timestamps and updater metadata.
+
+---
+
+### Files Modified
+
+#### `frontend/src/pages/CandidateDashboard.jsx`
+Replaced placeholder screen with a real candidate summary: displays the candidate's 3 most recent applications with status badges and timestamps, quick navigation links to the full application list, and a direct call to action to browse open jobs.
+
+#### `frontend/src/components/Navbar.jsx`
+Updated candidate navigation bar to display only `Jobs` (`/candidate/jobs`) and `My applications` (`/candidate/applications`), matching the design mockup and user specifications.
+
+#### `frontend/src/routes/AppRoutes.jsx`
+Registered all candidate routes (`/candidate`, `/candidate/jobs`, `/candidate/jobs/:id`, `/candidate/applications`, `/candidate/applications/:id`) wrapped under `<ProtectedRoute allowedRoles={["candidate"]}>`.
+
+#### `frontend/src/index.css`
+Added CSS classes for status badges, pagination, loaders, empty states, error banners, and the status history timeline.
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

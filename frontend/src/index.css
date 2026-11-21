@@ -557,3 +557,100 @@ a:hover {
   margin-top: 4px;
 }
 
+/* Success & Warning Alerts */
+.alert-success {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.alert-warning {
+  background-color: #fefce8;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+/* Tabs Bar (Pill tabs matching Recruiter Applicants.png) */
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  padding: 6px 18px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-gray);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-family);
+}
+
+.tab-btn:hover {
+  border-color: #cbd5e1;
+  color: var(--color-text);
+}
+
+.tab-btn.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+  background-color: #f0fdfa;
+}
+
+/* Data Table */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.data-table th {
+  padding: 12px 16px;
+  font-weight: 500;
+  color: var(--color-text-gray);
+  border-bottom: 1px solid var(--color-border);
+  background-color: #ffffff;
+}
+
+.data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Inline Confirm Prompt */
+.inline-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background-color: var(--color-bg);
+  padding: 4px 8px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--color-border);
+}
+
+.confirm-text {
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+

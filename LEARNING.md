@@ -229,6 +229,101 @@ Added CSS classes for status badges, pagination, loaders, empty states, error ba
 
 ---
 
+## Phase 5c — Recruiter Pages, Company Management, Job Posting & Applicant Pipeline
+
+### Goal
+Implement the recruiter workspace: company profile setup and editing, full job management (listing, creating, editing, and closing jobs), applicant review pipeline with status filter tabs and pagination, candidate application detail view with inline status updates (`shortlisted`, `rejected`, `hired`), and status history audit timeline.
+
+---
+
+### Concepts & Architecture
+
+#### 1. Ownership on the Frontend & Authority of the Server
+A fundamental principle of web application security is that the **server is always the sole authority for permissions and access control**.
+- Any user could manipulate local JavaScript variables, craft direct API calls, or use browser developer tools to alter IDs.
+- The server cryptographically inspects the JWT, fetches the user from the database, and strictly rejects unauthorized access (e.g., `403 Forbidden` if a recruiter attempts to edit another recruiter's job or view another recruiter's applicants).
+- **Why check on the frontend then?** Client-side ownership checks (e.g. comparing `job.postedBy` against `user._id`) exist purely for user experience (UX): they provide immediate, friendly, contextual feedback ("Access denied — you are not authorized to edit this job posting") before users perform unnecessary edits or get confused by backend network errors.
+
+#### 2. Controlled Forms & Data Sanitization
+In React, controlled forms link input values directly to component state (`value={state}` and `onChange={e => setState(e.target.value)}`).
+- **Array Transformations**: In fields like `requirements` and `skills`, candidates or recruiters type entries one per line. On form submission, the string is split by newlines, trimmed, filtered to remove empty lines, and deduplicated via `Array.from(new Set(...))` to produce clean arrays.
+- **UTC Date Synchronization**: Converting dates across timezones often leads to off-by-one errors (where picking "Nov 18" in one timezone saves as "Nov 17"). By explicitly appending `T00:00:00.000Z` on submit and extracting `.substring(0, 10)` on edit, the date is anchored to UTC without shifting.
+- **Clearing Optional Fields**: When an optional deadline is removed, the form explicitly sends `deadline: null` so that Mongoose and MongoDB unset the field, rather than sending an invalid empty string.
+
+#### 3. Updating the UI After a Successful Request
+When an action succeeds (e.g. closing a job or changing an applicant's status), the UI must reflect the new state. Two primary patterns are employed:
+- **Direct Local State Replacement**: Used for simple, deterministic changes like closing a job (`PATCH /api/jobs/:id/close`). The component updates `status: "closed"` directly in its local array, giving instant feedback without an extra round-trip network request.
+- **Refetching Enriched Data**: Used when the server populates related entities. In `PATCH /api/applications/:id/status`, the endpoint returns a minimal updated application document, but the application detail view requires full population (`statusHistory.changedBy` name and role). Refetching `GET /api/applications/:id` ensures the entire audit trail and user associations are completely up to date.
+
+#### 4. Accessible & Non-Disruptive Confirmations
+Destructive actions (like rejecting an applicant, hiring an applicant, or closing a job) must not rely on browser-blocking `window.confirm()` popups.
+- Inline confirmation prompts are rendered in-place with `aria-live="polite"` so screen readers announce the confirmation text.
+- Only one inline confirmation is permitted at a time across the screen.
+- When an inline confirmation is cancelled, focus is programmatically restored to the opening button using a React `ref`.
+
+---
+
+### Files Created
+
+#### `frontend/src/pages/CompanyProfile.jsx`
+Manages the recruiter's organization profile:
+- Calls `GET /api/companies/me`.
+- If the endpoint returns 404, it displays the company creation form (`POST /api/companies`).
+- If a company exists, it populates the edit form (`PUT /api/companies/me`).
+- Sanitizes website and logo URLs with `new URL()` ensuring valid `http:` or `https:` protocols.
+- Disables buttons while requests are in flight and displays inline 422 errors.
+
+#### `frontend/src/pages/RecruiterJobList.jsx`
+The central job management screen for recruiters (`/recruiter/jobs`):
+- Connects to `GET /api/jobs/my` to list all jobs created by the logged-in recruiter.
+- Displays title, status badge (`open` or `closed`), location, employment type, salary, deadline, and posted date.
+- Provides links to view applicants and edit the job.
+- Includes an accessible inline confirmation prompt for closing an open job (`PATCH /api/jobs/:id/close`).
+
+#### `frontend/src/pages/JobForm.jsx`
+A unified form component handling both job creation (`/recruiter/jobs/new`) and editing (`/recruiter/jobs/:id/edit`):
+- Verifies that the recruiter has a company before permitting job creation (displaying a setup prompt if missing).
+- Verifies recruiter ownership on edit, showing an access denied message if the job belongs to another user.
+- Warns users if a selected deadline is in the past.
+- Converts newline-separated textareas for requirements and skills into clean, deduplicated arrays.
+- Accurately converts date input values to UTC ISO timestamps on submit and allows clearing deadlines by sending `null`.
+- Displays an informational banner on closed jobs explaining that edits will update details but the job will remain closed.
+- Redirects to `/recruiter/jobs` upon creation or displays a success banner upon editing.
+
+#### `frontend/src/pages/JobApplicants.jsx`
+Applicants dashboard matching `docs/desgin/Recruiter Applicants.png` (`/recruiter/jobs/:id/applicants`):
+- Calls `GET /api/jobs/:id` to display the job title and company name in the header, verifying ownership.
+- Calls `GET /api/applications/job/:jobId` to list applicants.
+- Integrates pill-style status filter tabs (`All`, `Applied`, `Shortlisted`, `Rejected`, `Hired`) synchronized with `useSearchParams` (`?status=`), resetting to page 1 on tab changes.
+- Features `aria-current="page"` on the active tab for accessibility.
+- Displays candidate name, email, application date, status badge, and an action link to view the full application.
+
+#### `frontend/src/pages/RecruiterApplicationDetail.jsx`
+Full application review and hiring pipeline management page (`/recruiter/applications/:id`):
+- Displays candidate submission details (name, email, cover letter, verified resume link).
+- Features candidate stage action buttons (`Shortlist`, `Reject`, `Hire`).
+- Implements accessible inline confirmation for `reject` and `hire` actions.
+- Calls `PATCH /api/applications/:id/status` and refetches `GET /api/applications/:id` upon success to display the fully populated chronological audit history.
+- Operates seamlessly whether the parent job is open or closed.
+
+---
+
+### Files Modified
+
+#### `frontend/src/pages/RecruiterDashboard.jsx`
+Replaced placeholder with a live summary: displays the company name (or a creation prompt if 404), the 3 newest job postings with posted dates and status badges, and quick links to manage the company and post new jobs.
+
+#### `frontend/src/components/Navbar.jsx`
+Updated recruiter navigation links to `Dashboard` (`/recruiter`), `Company` (`/recruiter/company`), `Jobs` (`/recruiter/jobs`), and `Post a job` (`/recruiter/jobs/new`).
+
+#### `frontend/src/routes/AppRoutes.jsx`
+Registered all recruiter routes (`/recruiter`, `/recruiter/company`, `/recruiter/jobs`, `/recruiter/jobs/new`, `/recruiter/jobs/:id/edit`, `/recruiter/jobs/:id/applicants`, `/recruiter/applications/:id`) wrapped in `<ProtectedRoute allowedRoles={["recruiter"]}>`.
+
+#### `frontend/src/index.css`
+Added CSS classes for pill filter tabs (`.tabs-bar`, `.tab-btn`), data tables (`.data-table`), inline confirmation prompts (`.inline-confirm`), and success alerts (`.alert-success`).
+
+---
+
 ## Phase 4 — Real-Time Notifications with Socket.IO
 
 ### Goal

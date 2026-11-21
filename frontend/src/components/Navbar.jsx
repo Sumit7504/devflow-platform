@@ -11,16 +11,24 @@ export default function Navbar() {
     navigate("/login");
   };
 
+  const getBrandDestination = () => {
+    if (!isAuthenticated || !user) return "/";
+    if (user.role === "candidate") return "/candidate";
+    if (user.role === "recruiter") return "/recruiter";
+    if (user.role === "admin") return "/admin";
+    return "/";
+  };
+
   return (
     <nav className="navbar">
       <div className="navbar-inner">
         <div className="nav-left">
-          <Link to={user?.role === "candidate" ? "/candidate" : "/"} className="nav-brand">
+          <Link to={getBrandDestination()} className="nav-brand">
             DevFlow
           </Link>
 
           <div className="nav-links">
-            {isAuthenticated && user?.role === "candidate" ? (
+            {isAuthenticated && user?.role === "candidate" && (
               <>
                 <NavLink
                   to="/candidate/jobs"
@@ -35,14 +43,49 @@ export default function Navbar() {
                   My applications
                 </NavLink>
               </>
-            ) : isAuthenticated && user ? (
+            )}
+
+            {isAuthenticated && user?.role === "recruiter" && (
+              <>
+                <NavLink
+                  to="/recruiter"
+                  end
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Dashboard
+                </NavLink>
+                <NavLink
+                  to="/recruiter/company"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Company
+                </NavLink>
+                <NavLink
+                  to="/recruiter/jobs"
+                  end
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Jobs
+                </NavLink>
+                <NavLink
+                  to="/recruiter/jobs/new"
+                  className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                >
+                  Post a job
+                </NavLink>
+              </>
+            )}
+
+            {isAuthenticated && user?.role === "admin" && (
               <NavLink
-                to={user.role === "recruiter" ? "/recruiter" : "/admin"}
+                to="/admin"
                 className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
               >
                 Dashboard
               </NavLink>
-            ) : (
+            )}
+
+            {!isAuthenticated && (
               <NavLink
                 to="/"
                 end
